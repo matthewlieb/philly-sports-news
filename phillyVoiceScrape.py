@@ -26,7 +26,7 @@ def scrape_website(URL):
             if link_url:
                 urls.append("https://www.phillyvoice.com" + str(link_url))
 
-    for url in urls[:6]:
+    for url in urls[:4]:
         if "https://www.phillyvoice.com/" in url:
             try:
                 page = requests.get(url)
@@ -35,20 +35,12 @@ def scrape_website(URL):
                 return None
             soup = BeautifulSoup(page.content, "html.parser")
             results = soup.find_all("div", {"class":"body-content"})
-            images = soup.find_all("div", {"class":"feature-image"})
-            for image in images:
-                image = image.find("img")
-                if len(image) >= 2:
-                    image = image[1]
-                else:
-                    image = image
-                #print(image)
-                #print("\n")
-                if image:
-                    #print(image['src'])
-                    imageURL = image.get('src')
-                    if imageURL:
-                        imageURLS.append(imageURL)
+            image_div = soup.find('div', class_='feature-image')
+            sponsor_div = image_div.find('div', class_='sponsor')
+            if sponsor_div:
+                sponsor_div.decompose() # remove sponsor div from the image div
+            image_url = image_div.img['src']            
+            imageURLS.append(image_url)
             for entry in results:
                 blurb = entry.find("p").text.strip()
                 if blurb:
@@ -70,6 +62,6 @@ titles4c, urls4c, imageURLS4c, blurbs4c = scrape_website(URL4)
 #you can then use the lists as needed. For example, you could print out the first item in each list like this:
 # print(titles4[0])
 # print(titles4a[0])
-# print(blurbs4[4])
-# print(blurbs4[3])
-# print(imageURLS4[1])
+# print(blurbs4a[0])
+# print(urls4a[0])
+# print(imageURLS4a[0])

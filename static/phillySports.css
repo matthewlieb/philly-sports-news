@@ -253,11 +253,8 @@ h1, h2, h3, h4, h5, h6, p {
 }
 
 .card-advertisement {
-  width: 100%;
-  margin-top: 30px; /* adjust as needed */
-  padding-top: 124px;
   position: sticky;
-  top: 0;
+  top: 125px;
   z-index: 9997;
   color: black !important;
 }
@@ -265,3 +262,4 @@ h1, h2, h3, h4, h5, h6, p {
 .card-advertisement p{
   color: black;
 }
+
