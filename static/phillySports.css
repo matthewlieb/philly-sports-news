@@ -1,0 +1,267 @@
+.eagles-body{
+  background-image: url("phillySportsNewsEagles.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.sixers-body{
+  background-image: url("phillySportsNewsSixers.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.phillies-body{
+  background-image: url("phillySportsNewsPhillies.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+.flyers-body{
+  background-image: url("phillySportsNewsFlyers.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+}
+
+@media (min-width: 1250px) {
+  .container {
+    max-width: 1250px;
+  }
+}
+
+/*Styling for rows */
+.row {
+  background-color: #fff;
+  margin: 0 -15px;
+  padding: 20px;
+}
+
+.row1 .card{
+  background-color: #fff;
+}
+
+.row1 .card h3{
+  color: black;
+}
+
+.row1 p{
+  color:black;
+}
+
+.eagles-navbar-toggler{
+  background-color: #22656E;
+}
+
+.sixers-navbar-toggler{
+  background-color: #3A8AC3;
+}
+
+.phillies-navbar-toggler{
+  background-color: #EC5E6A;
+}
+
+.flyers-navbar-toggler{
+  background-color: #E6650B;
+}
+
+/*Styling for navbar */
+.eagles-navbar {
+  background-color: #014A53;
+}
+
+.sixers-navbar {
+  background-color: #006BB8;
+}
+
+.phillies-navbar {
+  background-color: #E81828;
+}
+
+.flyers-navbar {
+  background-color: #FD4300;
+}
+
+.navbar-brand, .nav-link {
+  font-weight: bold;
+  color: #fff;
+}
+
+.nav-link {
+  font-size: 1.2rem;
+  color: #fff;
+}
+
+.nav-link:hover, .nav-link:focus {
+  padding: 1rem;
+}
+
+.nav-item {
+  padding: 0 1rem;
+  color: #fff;
+}
+
+.navbar-brand, .nav-link {
+  color: #fff !important; /* Set the color of the text to white */
+}
+
+.navbar{
+  position: sticky;
+  top: 0;
+  z-index: 9999;
+}
+
+/*Styling for ticker */
+#ticker {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  overflow: hidden;
+  position: sticky;
+  top: 60.8px;
+  z-index: 9998;
+
+}
+
+@media (max-width: 991px) {
+  #ticker {
+    top: 56px;
+  }
+}
+
+#ticker .carousel-item {
+  color: #222;
+  font-size: 1rem;
+  font-weight: bold;
+  text-align: center;
+}
+
+#ticker .carousel-item p {
+  margin: 0;
+  padding: 15px;
+  color: black;
+}
+
+#ticker .carousel-control-prev,
+#ticker .carousel-control-next {
+  color: #222;
+  font-size: 1.2rem;
+}
+
+#ticker .carousel-control-prev:hover,
+#ticker .carousel-control-next:hover {
+  color: #fff;
+  text-decoration: none;
+}
+
+.carousel-control-prev-icon,
+.carousel-control-next-icon {
+  filter: invert(100%);
+}
+
+.img-fluid {
+  width: 100%; /* Set the width to 100% of the container */
+  height: 100%; /* Set the height to 100% of the container */
+  object-fit: cover; /* Resize the image to cover the container */
+}
+
+p{
+  vertical-align: middle;
+  color: white;
+}
+
+/*Styling for cards*/
+.card {
+  border: 1px solid #ccc;
+  box-shadow: 2px 2px 6px 0px rgba(0,0,0,0.2);
+  margin: 15px;
+  padding: 15px;
+  background-color:#3A8AC3;
+}
+
+.eagles-card {
+  background-color:#22656E;
+}
+
+.phillies-card {
+  background-color:#EC5E6A;
+}
+
+.flyers-card {
+  background-color:#E6650B;
+}
+
+.card h3 {
+  width: 100%;
+  color: #fff;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.footer {
+  background-color: #006BB8;
+  color: #fff;
+  text-align: center;
+  padding: 20px;
+  width: 100%;
+}
+
+.footer a{
+  color: white;
+}
+
+.eagles-footer {
+  background-color: #014A53;
+}
+
+.phillies-footer {
+  background-color: #E81828;
+}
+
+.flyers-footer {
+  background-color: #FD4300;
+}
+
+.bottom{
+  max-height: 100px;
+}
+
+/* .article-source{
+  color: lightgray;
+}
+
+.row1 .article-source{
+  color: lightgray;
+} */
+
+.article-source{
+  font-weight: bold;
+}
+
+.demo {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding-top: 2%;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;700&family=Raleway:wght@300;400;700&display=swap');
+
+body {
+  font-family: 'Montserrat', sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6, p {
+  font-family: 'Raleway', sans-serif;
+}
+
+.card-advertisement {
+  width: 100%;
+  margin-top: 30px; /* adjust as needed */
+  padding-top: 124px;
+  position: sticky;
+  top: 0;
+  z-index: 9997;
+  color: black !important;
+}
+
+.card-advertisement p{
+  color: black;
+}
