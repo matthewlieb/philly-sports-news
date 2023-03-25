@@ -1,4 +1,0 @@
-# .gitignore
-venv
-__pycache__
-config.py
