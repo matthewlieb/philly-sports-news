@@ -1,1 +1,3 @@
-api_key = "AIzaSyBd4WPFzQeOkzWaTD1RJRE1c2Axcl20v0E"
+import os
+
+api_key = os.environ.get('API_KEY')
