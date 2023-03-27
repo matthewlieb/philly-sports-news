@@ -42,4 +42,4 @@ sixersScrape.py
 	-------> index2a.html
 	-------> index3a.html
 	-------> index4a.html
-![image](https://user-images.githubusercontent.com/4676246/227815736-ba8f0266-1adc-493c-9466-3ddedbe60045.png)
+
