@@ -1,5 +1,7 @@
 # philly-sports-news
 
+<img width="468" alt="image" src="https://user-images.githubusercontent.com/4676246/227815885-fd616655-c1a8-436b-ba81-2b6f1cee8026.png">
+
 Project description: 
 
 This is a project I made using primarily HTML, Python, and CSS which scrapes the web for the latest news on the Philadelphia Eagles, Sixers, Phillies, and Flyers. The site uses Beautiful Soup 4 to scrape the web for the latest news articles. The YouTube API is used to deliver the latest YouTube videos for each team. The site is designed using custom CSS, and Bootstrap. And Flask is used for the web framework.
