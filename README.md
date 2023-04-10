@@ -1,51 +1,47 @@
-# philly-sports-news
+Philly Sports News 🔍
 
 <img width="468" alt="image" src="https://user-images.githubusercontent.com/4676246/227815885-fd616655-c1a8-436b-ba81-2b6f1cee8026.png">
 
-**Project description: 
-**
+This is a project I made using primarily HTML, Python, and CSS which scrapes the web for the latest news on the Philadelphia Eagles, Sixers, Phillies, and Flyers. The site uses Beautiful Soup 4 to scrape the web for the latest news articles. The YouTube API is used to deliver the latest YouTube videos for each team. The site is designed using custom CSS, and Bootstrap. And Flask is used for the web framework 💡
 
-This is a project I made using primarily HTML, Python, and CSS which scrapes the web for the latest news on the Philadelphia Eagles, Sixers, Phillies, and Flyers. The site uses Beautiful Soup 4 to scrape the web for the latest news articles. The YouTube API is used to deliver the latest YouTube videos for each team. The site is designed using custom CSS, and Bootstrap. And Flask is used for the web framework.
+Features ✨
 
-**Installation instructions: 
-**
+Latest headlines for Eagles, Sixers, Phillies, and Flyers news 🚀
+YouTube videos featuring updates on Philly sports news 🌟
+Betting odds for latest matches 🎉
 
-The project is hosted using Heroku and can be found at https://www.phillysportdaily.com. To run the project locally, download the files into a directory, navigate to the directory, and run the app.py file using ‘python3 app.py’. It may take a few moments, but this should run the app on a local host, which can be launched in any browser. 
 
-**Usage instructions: 
-**
+Installation 🛠️
 
-To use the project, ensure that all files from the GitHub repo are downloaded in a single directory. Open a terminal and navigate to that directory using ‘cd [DIRECTORY PATH]’. Once in the project directory, the app can be run using ‘python3 app.py’. Changes can be made to any of the files in the directory to customize the web app as desired. However, unique API keys are required to avoid rate limits and security issues. 
+Clone this repository
+Open up your shell
+cd [path of repository]
+run python3 app.py
 
-**Project structure: 
-**
+Unique YouTube API keys are required in config.py
 
-The web app is structured as follows:
+Usage 🚀
 
-Philly-Sports-News
+The project is hosted using Heroku and can be found at https://www.phillysportdaily.com. The latest news is displayed for the Eagles by default, but switching pages will provide Sixers news, Phillies news, and Flyers news. A ticker displays headlines at the top of the page. Random YouTube videos are embedded, and a widget shows the latest betting odds  📚
 
-	Procfile
-	app.py
-	config.py
-	eaglesScrape.py
-	fansidedScrape.py
-	flyersScrape.py
-	nbcPhiladelphiaScrape.py
-	philliesScrape.py
-	phillyVoiceScrape.py
-	rateLimiter.py
-	requirements.txt
-	sbNationScrape.py
-	sixersScrape.py
-	-------> static
-		-------> phillySportsNewsEagles.png
-		-------> phillySportsNewsSixers.png
-		-------> phillySportsNewsPhillies.png
-		-------> phillySportsNewsFlyers.png
-		-------> phillySports.css
-	-------> templates
-		-------> index.html
-		-------> index2a.html
-		-------> index3a.html
-		-------> index4a.html
+Contributing 🤝
+
+Anyone is welcome to contribute 🌟
+
+License 📝
+
+This project does not yet have a license 📄
+
+Contact 📞
+
+GitHub: https://github.com/matthewlieb
+
+LinkedIn: https://www.linkedin.com/in/matthew-lieb/ 📧
+
+Acknowledgements 🙏
+
+*This video was helpful: https://www.youtube.com/watch?v=gvdSkBmjpbY&t=568s
+
+*ChatGPT aided in the development of the code and creation of this project 🌟
+
 
