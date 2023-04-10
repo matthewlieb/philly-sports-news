@@ -48,10 +48,12 @@ def scrape_website(URL):
             article = soup.find("article")
             if article is not None:
                 bigLetter = article.find("span").text.strip()
-                blurb = article.find("p").text.strip()
-                blurb = blurb.strip()
-                blurbs.append(bigLetter[1:] + blurb)
-
+                if article.find("p"):
+                    blurb = article.find("p").text.strip()
+                    blurb = blurb.strip()
+                    blurbs.append(bigLetter[1:] + blurb)
+                else:
+                    blurbs.append("")
         return titles, urls, imageURLS, blurbs
 
     except requests.exceptions.HTTPError as errh:
