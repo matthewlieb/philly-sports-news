@@ -6,47 +6,49 @@ def scrape_website(URL):
         page = requests.get(URL)
     except requests.exceptions.RequestException as e:
         print(f"Error: {e}")
-        return None, None, None, None
+        return [], [], [], []
     soup = BeautifulSoup(page.content, "html.parser")
-    results = soup.find_all("div", {"class":"brand-font tile-article-link-wrapper TileArticle_tileArticleLinkWrapper__k0V39"})
+
+    # Define the class selectors
+    article_selector = "div.brand-font.tile-article-link-wrapper.TileArticle_tileArticleLinkWrapper__k0V39"
+    image_selector = "img.TileArticle_tileArticleImage__epak1"
 
     titles = []
     urls = []
     blurbs = []
     imageURLS = []
 
-    images = soup.find_all("img", class_="TileArticle_tileArticleImage__epak1")
-    image1 = soup.find("span", class_="bg-cover bg-center overflow-hidden rounded-t-md md:rounded-l-md md:rounded-tr-none h-full group-hover:scale-105 transform transition duration-500 ease-in-out block motion-reduce:transform-none")
-    if image1:
-        imageURL1 = image1.get("style")[97:-1]
-        imageURLS.append(imageURL1)
-
+    # Extracting image URLs
+    images = soup.find_all(image_selector)
     for image in images:
         imageURL = image.get("src")
         if imageURL and "https://" in imageURL:
             imageURLS.append(imageURL)
 
+    # Extracting articles
+    results = soup.find_all(article_selector)
     for entry in results:
         title_element = entry.find("h3")
-        blurb = entry.find("p").text.strip()
+        blurb_element = entry.find("p")
+        
         if title_element: 
-            title = title_element.text.strip()
-            titles.append(title)
-            blurbs.append(blurb)
-            link = entry.find("a")
-            if link:
-                link_url = link["href"]
-                urls.append("https:/nba.com" + str(link_url))
+            titles.append(title_element.text.strip())
+        
+        if blurb_element:
+            blurbs.append(blurb_element.text.strip())
+        
+        link_element = entry.find("a")
+        if link_element and link_element.has_attr("href"):
+            urls.append(link_element['href'])  # Adjust base URL if needed
+
     return titles, blurbs, urls, imageURLS
 
 URL = "https://www.nba.com/sixers/archives"
 titles2a, blurbs2a, urls2a, imageURLS2a = scrape_website(URL)
 
-
-# print("\n")
-# for i in range(6):
-#     print(titles2a[i])
-#     print(blurbs2a[i])
-#     print(urls2a[i])
-#     print(imageURLS2a[i])
-#     print("\n")
+# Print out the first few items for testing
+# for i in range(min(6, len(titles2a))):  # Ensuring not to go out of index
+#     print("Title:", titles2a[i])
+#     print("Blurb:", blurbs2a[i])
+#     print("URL:", urls2a[i])
+#     print("Image URL:", imageURLS2a[i], "\n")

@@ -41,7 +41,7 @@ def home():
 
     video_id = eagles_request()
 
-    # Create the embed code for the embeddable and available video
+    #Create the embed code for the embeddable and available video
     embed_code = '<iframe width="560" height="315" src="https://www.youtube.com/embed/' + video_id + '" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
 
     # Read the contents of the template file into a string

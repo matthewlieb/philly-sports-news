@@ -8,42 +8,50 @@ def scrape_website(URL):
         page.raise_for_status()
 
         soup = BeautifulSoup(page.content, "html.parser")
-        results = soup.find_all("article", {"class":"article-item"})
-        images = soup.find_all("div", {"class":"article-item__img-container"})
+        results = soup.find_all("article", class_="nhl-c-card -default oc-card--boxed-vertical-80 -no-description")
 
         titles = []
         urls = []
         blurbs = []
         imageURLS = []
 
-        for image in images:
-            image = image.find("img")
-            if image is not None:
-                if image.get('src') is not None:
-                    imageURL = str(image.get('src'))
-                    imageURLS.append(imageURL)
-                elif image.get('data-src') is not None:
-                    imageURL = str(image.get('data-src'))
-                    imageURLS.append(imageURL)
-                else:
-                    imageURLS.append("")
-
         for entry in results:
-            title_element = entry.find("h1")
-            blurb = entry.find("h2")
-            if blurb is not None:
-                blurbs.append(blurb.text.strip())
+            # Extracting title
+            title_element = entry.find("h2", class_="fa-text__title")
+            if title_element:
+                titles.append(title_element.text.strip())
+            
+            # Extracting link URL
+            link_element = entry.parent  # The parent of the <article> tag should be the <a> tag
+            full_url = ""
+            if link_element.name == 'a' and link_element.has_attr('href'):
+                href = link_element['href']
+                # Check if the URL is absolute or relative
+                if href.startswith('http'):
+                    full_url = href
+                else:
+                    full_url = "https://www.nhl.com" + href
+                urls.append(full_url)
 
-            if title_element is not None:  # Check if the element was found
-                title = title_element.text.strip()
-                titles.append(title)
+            # Extracting image URL
+            image_element = entry.find("img")
+            if image_element and image_element.has_attr('src'):
+                imageURLS.append(image_element['src'])
+            else:
+                imageURLS.append("")
 
-                link = entry.find("a", {"class":"article-item__more"})
-                if link is not None:
-                    link_url = link["href"]
-                    urls.append("https://www.nhl.com" + str(link_url))
+            # Extracting blurb from the article page
+            if full_url:
+                article_page = requests.get(full_url)
+                article_soup = BeautifulSoup(article_page.content, "html.parser")
+                blurb_element = article_soup.find("p", class_="nhl-c-article__summary nhl-ty-subtitle--2")
+                if blurb_element:
+                    blurbs.append(blurb_element.text.strip())
+                else:
+                    blurbs.append("")
 
         return titles, blurbs, urls, imageURLS
+    
     except requests.exceptions.RequestException as e:
         print(f"An error occured: {e}")
         return None
@@ -51,7 +59,12 @@ def scrape_website(URL):
 URL = "https://www.nhl.com/flyers/news"
 titles2c, blurbs2c, urls2c, imageURLS2c = scrape_website(URL)
 
-# print(titles2c[0])
-# print(blurbs2c[0])
-# print(urls2c[0])
-# print(imageURLS2c[0])
+# Make sure to check if lists are not empty before printing
+# if titles2c:
+#     print(titles2c[0])
+# if blurbs2c:
+#     print(blurbs2c[0])
+# if urls2c:
+#     print(urls2c[0])
+# if imageURLS2c:
+#     print(imageURLS2c[0])
