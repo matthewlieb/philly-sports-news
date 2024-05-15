@@ -49,6 +49,6 @@ URL = "https://www.philadelphiaeagles.com/news/all"
 titles2, blurbs2, urls2, imageURLS2 = scrape_website(URL)
 
 # print(titles2[0])
-# print(blurbs2[0])
-# print(urls2[0])
-# print(imageURLS2[0])
+# # print(blurbs2[0])
+# # print(urls2[0])
+# # print(imageURLS2[0])

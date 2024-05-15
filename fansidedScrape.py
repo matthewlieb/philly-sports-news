@@ -65,3 +65,5 @@ titles5, urls5, imageURLS5, blurbs5 = scrape_website(URL1)
 titles5a, urls5a, imageURLS5a, blurbs5a = scrape_website(URL2)
 titles5b, urls5b, blurbs5b, imageURLS5b = scrape_website(URL3)
 titles5c, urls5c, imageURLS5c, blurbs5c = scrape_website(URL4)
+
+# print(titles5[0])

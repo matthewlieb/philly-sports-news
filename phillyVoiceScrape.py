@@ -60,8 +60,8 @@ titles4b, urls4b, imageURLS4b, blurbs4b = scrape_website(URL3)
 titles4c, urls4c, imageURLS4c, blurbs4c = scrape_website(URL4)
 
 #you can then use the lists as needed. For example, you could print out the first item in each list like this:
-print(titles4[0])
-print(titles4a[0])
-print(blurbs4a[0])
-print(urls4a[0])
-print(imageURLS4a[0])
+# print(titles4[0])
+# print(titles4a[0])
+# print(blurbs4a[0])
+# print(urls4a[0])
+# print(imageURLS4a[0])

@@ -1,4 +1,4 @@
-import requests 
+import requests
 from bs4 import BeautifulSoup
 
 def scrape_website(URL):
@@ -17,14 +17,14 @@ def scrape_website(URL):
 
         for entry in results:
             # Extracting title
-            title_element = entry.find("h2", class_="fa-text__title")
+            title_element = entry.find("h3", class_="fa-text__title")
             if title_element:
                 titles.append(title_element.text.strip())
             
             # Extracting link URL
-            link_element = entry.parent  # The parent of the <article> tag should be the <a> tag
+            link_element = entry.find_parent("a")  # Find the parent <a> tag
             full_url = ""
-            if link_element.name == 'a' and link_element.has_attr('href'):
+            if link_element and link_element.has_attr('href'):
                 href = link_element['href']
                 # Check if the URL is absolute or relative
                 if href.startswith('http'):
@@ -43,6 +43,7 @@ def scrape_website(URL):
             # Extracting blurb from the article page
             if full_url:
                 article_page = requests.get(full_url)
+                article_page.raise_for_status()
                 article_soup = BeautifulSoup(article_page.content, "html.parser")
                 blurb_element = article_soup.find("p", class_="nhl-c-article__summary nhl-ty-subtitle--2")
                 if blurb_element:
@@ -53,18 +54,17 @@ def scrape_website(URL):
         return titles, blurbs, urls, imageURLS
     
     except requests.exceptions.RequestException as e:
-        print(f"An error occured: {e}")
+        print(f"An error occurred: {e}")
         return None
 
 URL = "https://www.nhl.com/flyers/news"
 titles2c, blurbs2c, urls2c, imageURLS2c = scrape_website(URL)
 
-# Make sure to check if lists are not empty before printing
+# # Print results to verify
 # if titles2c:
-#     print(titles2c[0])
-# if blurbs2c:
-#     print(blurbs2c[0])
-# if urls2c:
-#     print(urls2c[0])
-# if imageURLS2c:
-#     print(imageURLS2c[0])
+#     for title, blurb, url, image in zip(titles2c, blurbs2c, urls2c, imageURLS2c):
+#         print(f"Title: {title}")
+#         print(f"Blurb: {blurb}")
+#         print(f"URL: {url}")
+#         print(f"Image URL: {image}")
+#         print()

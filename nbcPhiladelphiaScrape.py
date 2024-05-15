@@ -48,6 +48,6 @@ titles3b, urls3b, imageURLS3b, blurbs3b = scrape_website(URL3)
 titles3c, urls3c, imageURLS3c, blurbs3c = scrape_website(URL4)
 
 
-# For demonstration, print out the first item in each list
+# # For demonstration, print out the first item in each list
 # print(titles3[0])
-# print(imageURLS3[0])
+# # print(imageURLS3[0])
