@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+from articleEnhancer import enhance_article_data
 
 def scrape_website(URL):
     try:
@@ -50,10 +51,21 @@ def scrape_website(URL):
         else:
             blurbs.append("")
 
-    return titles, blurbs, urls, imageURLS
+    # Add authors list (MLB site doesn't show authors in list view)
+    authors = ["-- Philadelphia Phillies"] * len(titles)
+
+    # Return in standard order: titles, urls, images, blurbs, authors
+    return titles, urls, imageURLS, blurbs, authors
 
 URL = "https://www.mlb.com/phillies/news"
-titles2b, blurbs2b, urls2b, imageURLS2b = scrape_website(URL)
+titles2b, urls2b, imageURLS2b, blurbs2b, authors2b = scrape_website(URL)
+
+# Enhance all articles to ensure complete data for every card
+if titles2b and urls2b:
+    print("Enhancing Phillies articles with complete data...")
+    titles2b, urls2b, imageURLS2b, blurbs2b, authors2b = enhance_article_data(
+        titles2b, urls2b, imageURLS2b, blurbs2b, authors2b, max_enhance=10, enhance_all=True
+    )
 
 # # Print results to verify
 # if titles2b:

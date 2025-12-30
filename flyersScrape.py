@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+from articleEnhancer import enhance_article_data
 
 def scrape_website(URL):
     try:
@@ -50,15 +51,28 @@ def scrape_website(URL):
                     blurbs.append(blurb_element.text.strip())
                 else:
                     blurbs.append("")
+            else:
+                blurbs.append("")
+        
+        # Add authors list (NHL site doesn't show authors in list view)
+        authors = ["-- Philadelphia Flyers"] * len(titles)
 
-        return titles, blurbs, urls, imageURLS
+        # Return in standard order: titles, urls, images, blurbs, authors
+        return titles, urls, imageURLS, blurbs, authors
     
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
         return None
 
 URL = "https://www.nhl.com/flyers/news"
-titles2c, blurbs2c, urls2c, imageURLS2c = scrape_website(URL)
+titles2c, urls2c, imageURLS2c, blurbs2c, authors2c = scrape_website(URL)
+
+# Enhance all articles to ensure complete data for every card
+if titles2c and urls2c:
+    print("Enhancing Flyers articles with complete data...")
+    titles2c, urls2c, imageURLS2c, blurbs2c, authors2c = enhance_article_data(
+        titles2c, urls2c, imageURLS2c, blurbs2c, authors2c, max_enhance=10, enhance_all=True
+    )
 
 # # Print results to verify
 # if titles2c:

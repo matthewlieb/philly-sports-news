@@ -1,5 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
+from articleEnhancer import enhance_article_data
 
 def scrape_website(URL):
     try:
@@ -11,56 +12,119 @@ def scrape_website(URL):
 
     soup = BeautifulSoup(page.content, "html.parser")
 
-    # Define the selectors
-    article_selector = "li.ContentGrid_contentGridColumnQuarter__Uiwvc"
-    title_selector = "h3.TileArticle_tileArticleTitle__lzLJZ"
-    blurb_selector = "p.TileArticle_tileArticleExcerpt__NpVq1"
-    link_selector = "a.TileArticle_tileLink__9vE5P"
-    image_selector = "img.TileArticle_tileArticleImage__epak1"
+    # Try multiple selectors for different website structures
+    selectors_to_try = [
+        "li.ContentGrid_contentGridColumnQuarter__Uiwvc",
+        "li[class*='ContentGrid']",
+        "li[class*='content']",
+        "article",
+        "div[class*='article']",
+        "div[class*='story']",
+        "div[class*='post']"
+    ]
+    
+    results = []
+    for selector in selectors_to_try:
+        results = soup.select(selector)
+        if len(results) > 0:
+            print(f"Found {len(results)} articles using selector: {selector}")
+            break
+    
+    # If no articles found, try to find any links that look like articles
+    if len(results) == 0:
+        links = soup.find_all('a', href=True)
+        article_links = []
+        for link in links:
+            href = link.get('href', '')
+            text = link.get_text().strip()
+            # Look for links that might be articles
+            if (('/news' in href or '/article' in href or '/story' in href) and 
+                len(text) > 20 and 
+                not any(ad_word in text.lower() for ad_word in ['advertisement', 'sponsored', 'promoted'])):
+                article_links.append(link)
+        
+        if len(article_links) > 0:
+            print(f"Found {len(article_links)} potential article links")
+            # Convert links to div-like structure for processing
+            results = [link.parent for link in article_links[:10] if link.parent]
 
     titles = []
     urls = []
     blurbs = []
     imageURLS = []
+    authors = []
 
-    # Extracting articles
-    results = soup.find_all("li", class_=article_selector)
-    print(f"Found {len(results)} articles.")
+    print(f"Processing {len(results)} articles.")
     for entry in results:
-        # Extracting title
-        title_element = entry.find("h3", class_=title_selector)
+        # Try to find title in various ways
+        title_element = None
+        for title_selector in ["h3", "h2", "h1", "a", ".title", "[class*='title']"]:
+            title_element = entry.find(title_selector)
+            if title_element and title_element.get_text().strip():
+                break
+        
         if title_element:
-            titles.append(title_element.text.strip())
-            print(f"Found title: {title_element.text.strip()}")
+            title_text = title_element.get_text().strip()
+            if title_text and len(title_text) > 5:
+                titles.append(title_text)
+                print(f"Found title: {title_text}")
+            else:
+                titles.append("")
+                print("No valid title found.")
         else:
             titles.append("")
             print("No title found.")
 
-        # Extracting blurb
-        blurb_element = entry.find("p", class_=blurb_selector)
+        # Try to find blurb
+        blurb_element = None
+        for blurb_selector in ["p", "div", ".excerpt", "[class*='excerpt']", "[class*='description']"]:
+            blurb_element = entry.find(blurb_selector)
+            if blurb_element and blurb_element.get_text().strip():
+                break
+        
         if blurb_element:
-            blurbs.append(blurb_element.text.strip())
-            print(f"Found blurb: {blurb_element.text.strip()}")
+            blurb_text = blurb_element.get_text().strip()
+            if blurb_text and len(blurb_text) > 10:
+                blurbs.append(blurb_text)
+                print(f"Found blurb: {blurb_text}")
+            else:
+                blurbs.append("")
+                print("No valid blurb found.")
         else:
             blurbs.append("")
             print("No blurb found.")
 
-        # Extracting URL
-        link_element = entry.find("a", class_=link_selector)
-        if link_element and link_element['href']:
+        # Try to find URL
+        link_element = None
+        for link_selector in ["a", "[href]"]:
+            link_element = entry.find(link_selector)
+            if link_element and link_element.get('href'):
+                break
+        
+        if link_element and link_element.get('href'):
             href = link_element['href']
-            full_url = f"https://www.nba.com{href}" if href.startswith('/') else href
+            if href.startswith('/'):
+                full_url = f"https://www.nba.com{href}"
+            elif href.startswith('http'):
+                full_url = href
+            else:
+                full_url = f"https://www.nba.com/{href}"
             urls.append(full_url)
             print(f"Found URL: {full_url}")
         else:
             urls.append("")
             print("No URL found.")
 
-        # Extracting image URL
-        image_element = entry.find("img", class_=image_selector)
+        # Try to find image
+        image_element = None
+        for image_selector in ["img", "[src]"]:
+            image_element = entry.find(image_selector)
+            if image_element and image_element.get("src"):
+                break
+        
         if image_element and image_element.get("src"):
             imageURL = image_element["src"]
-            if "https://" in imageURL:
+            if imageURL.startswith('http'):
                 imageURLS.append(imageURL)
                 print(f"Found image URL: {imageURL}")
             else:
@@ -69,11 +133,21 @@ def scrape_website(URL):
         else:
             imageURLS.append("")
             print("No image found.")
+        
+        # Add author (Sixers site doesn't show authors, so use default)
+        authors.append("-- Philadelphia 76ers")
 
-    return titles, blurbs, urls, imageURLS
+    return titles, urls, imageURLS, blurbs, authors
 
 URL = "https://www.nba.com/sixers/archives"
-titles2a, blurbs2a, urls2a, imageURLS2a = scrape_website(URL)
+titles2a, urls2a, imageURLS2a, blurbs2a, authors2a = scrape_website(URL)
+
+# Enhance all articles to ensure complete data for every card
+if titles2a and urls2a:
+    print("Enhancing Sixers articles with complete data...")
+    titles2a, urls2a, imageURLS2a, blurbs2a, authors2a = enhance_article_data(
+        titles2a, urls2a, imageURLS2a, blurbs2a, authors2a, max_enhance=10, enhance_all=True
+    )
 
 # Print out the first few items for testing
 for i in range(min(6, len(titles2a))):  # Ensuring not to go out of index

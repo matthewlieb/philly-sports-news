@@ -1,12 +1,13 @@
 import requests
 from bs4 import BeautifulSoup
+from articleEnhancer import enhance_article_data
 
 def scrape_website(URL):
     try:
         page = requests.get(URL)
     except requests.exceptions.RequestException as e:
         print("Error: Failed to establish a connection to the website")
-        return None
+        return [], [], [], [], []
 
     soup = BeautifulSoup(page.content, "html.parser")
     results = soup.find_all("div", {"class":"article-text"})
@@ -15,6 +16,7 @@ def scrape_website(URL):
     urls = []
     imageURLS = []
     blurbs = []
+    authors = []
 
     for entry in results:
         title_element = entry.find("h1")
@@ -32,7 +34,9 @@ def scrape_website(URL):
                 page = requests.get(url)
             except requests.exceptions.RequestException as e:
                 print("Error: Failed to establish a connection to the website")
-                return None
+                blurbs.append("")
+                authors.append("-- PhillyVoice")
+                continue
             soup = BeautifulSoup(page.content, "html.parser")
             results = soup.find_all("div", {"class":"body-content"})
             image_div = soup.find('div', class_='feature-image')
@@ -45,19 +49,52 @@ def scrape_website(URL):
                 blurb = entry.find("p").text.strip()
                 if blurb:
                     blurbs.append(blurb)
+            
+            # Try to find author
+            author_tag = soup.find("span", class_="author-name") or soup.find("a", class_="author-name")
+            if author_tag:
+                authors.append("-- " + author_tag.get_text().strip())
+            else:
+                authors.append("-- PhillyVoice")
         else:
             blurbs.append("")
-    return titles, urls, imageURLS, blurbs
+            authors.append("-- PhillyVoice")
+    
+    # Ensure authors list matches the length of other lists
+    while len(authors) < len(titles):
+        authors.append("-- PhillyVoice")
+    
+    return titles, urls, imageURLS, blurbs, authors
 
 URL1 = "https://www.phillyvoice.com/tags/eagles/"
 URL2 = "https://www.phillyvoice.com/tags/sixers/"
 URL3 = "https://www.phillyvoice.com/tags/phillies/"
 URL4 = "https://www.phillyvoice.com/tags/flyers/"
 
-titles4, urls4, imageURLS4, blurbs4 = scrape_website(URL1)
-titles4a, urls4a, imageURLS4a, blurbs4a = scrape_website(URL2)
-titles4b, urls4b, imageURLS4b, blurbs4b = scrape_website(URL3)
-titles4c, urls4c, imageURLS4c, blurbs4c = scrape_website(URL4)
+titles4, urls4, imageURLS4, blurbs4, authors4 = scrape_website(URL1)
+titles4a, urls4a, imageURLS4a, blurbs4a, authors4a = scrape_website(URL2)
+titles4b, urls4b, imageURLS4b, blurbs4b, authors4b = scrape_website(URL3)
+titles4c, urls4c, imageURLS4c, blurbs4c, authors4c = scrape_website(URL4)
+
+# Enhance all articles to ensure complete data for every card
+# Note: PhillyVoice already fetches from individual pages, but we'll enhance to ensure completeness
+print("Enhancing PhillyVoice articles with complete data...")
+if titles4 and urls4:
+    titles4, urls4, imageURLS4, blurbs4, authors4 = enhance_article_data(
+        titles4, urls4, imageURLS4, blurbs4, authors4, max_enhance=10, enhance_all=True
+    )
+if titles4a and urls4a:
+    titles4a, urls4a, imageURLS4a, blurbs4a, authors4a = enhance_article_data(
+        titles4a, urls4a, imageURLS4a, blurbs4a, authors4a, max_enhance=10, enhance_all=True
+    )
+if titles4b and urls4b:
+    titles4b, urls4b, imageURLS4b, blurbs4b, authors4b = enhance_article_data(
+        titles4b, urls4b, imageURLS4b, blurbs4b, authors4b, max_enhance=10, enhance_all=True
+    )
+if titles4c and urls4c:
+    titles4c, urls4c, imageURLS4c, blurbs4c, authors4c = enhance_article_data(
+        titles4c, urls4c, imageURLS4c, blurbs4c, authors4c, max_enhance=10, enhance_all=True
+    )
 
 #you can then use the lists as needed. For example, you could print out the first item in each list like this:
 # print(titles4[0])
