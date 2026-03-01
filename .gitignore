@@ -10,7 +10,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Do not ignore our app package lib/ (remove 'lib/' to track it)
 lib64/
 parts/
 sdist/
