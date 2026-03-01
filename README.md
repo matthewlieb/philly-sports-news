@@ -36,7 +36,9 @@ Anyone is welcome to contribute to the development of Philly Sports News. To con
 
 ## License 📝
 
-This project does not yet have a license. 
+This project does not yet have a license.
+
+**Docs:** Detailed guides (deploy, ads, Twitter bot plan) are in the [**docs/**](docs/) folder. See [docs/README.md](docs/README.md) for an index.
 
 ## Contact 📞
 
@@ -57,6 +59,13 @@ philly-sports-news/
 ├── Procfile            # Heroku process
 ├── README.md
 ├── requirements.txt
+├── docs/               # Project docs (deploy, ads, twitter bot plan)
+│   ├── README.md       # Doc index
+│   ├── deploy.md
+│   ├── ads.md
+│   └── twitter-bot-plan.md
+├── assets/
+│   └── images/         # Screenshots, reference images (not served by app)
 ├── lib/                # Shared app logic
 │   ├── config.py       # Environment config (e.g. API_KEY)
 │   ├── rate_limiter.py # YouTube rate-limited requests
@@ -66,9 +75,14 @@ philly-sports-news/
 │   ├── fetcher.py      # HTML fetch (requests + optional Selenium)
 │   ├── rss_scraper.py  # RSS feeds (SB Nation, etc.)
 │   └── source_collectors.py  # Per-team, per-source collectors
+├── twitter_bot/        # X/Twitter bot (separate module)
+│   ├── run.py          # Entry: python -m twitter_bot.run
+│   ├── config/voice.py
+│   ├── docs/           # Bot-specific docs (e.g. satire images)
+│   └── assets/images/  # Bot media / reference images
 ├── utils/
 │   └── article_filter.py  # Filtering and ranking
-├── static/             # CSS, assets
+├── static/             # CSS, web app assets
 └── templates/          # HTML templates
 ```
 

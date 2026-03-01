@@ -43,8 +43,8 @@ If you still own the domain:
 2. Heroku will show DNS targets (e.g. `something.herokudns.com`).
 3. **At your domain registrar:** Add CNAME records:
    - `www` → target Heroku gives for `www.phillysportdaily.com`
-   - For root `phillysportdaily.com`, use Heroku’s root domain target (they’ll show an A record or ALIAS/CNAME for root).
-4. In Heroku, enable “Automatic TLS” for the custom domain so HTTPS is used.
+   - For root `phillysportdaily.com`, use Heroku's root domain target (they'll show an A record or ALIAS/CNAME for root).
+4. In Heroku, enable "Automatic TLS" for the custom domain so HTTPS is used.
 
 After DNS propagates (up to 48 hours, often sooner), the site will be live at phillysportdaily.com.
 

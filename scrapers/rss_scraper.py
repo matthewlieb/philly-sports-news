@@ -25,7 +25,9 @@ def fetch_rss_feed(feed_url: str, max_articles: int = 20) -> List[dict]:
         List of article dictionaries with keys: title, url, image, description, author, source
     """
     try:
-        feed = feedparser.parse(feed_url)
+        # Use a browser-like User-Agent so some feeds (e.g. SBNation /feed) return XML instead of HTML
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"}
+        feed = feedparser.parse(feed_url, request_headers=headers)
         
         # Check for parsing errors
         if feed.bozo:

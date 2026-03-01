@@ -1,0 +1,40 @@
+# Tweet 4x per day (under X free tier 500 posts/month)
+# Times: 01:00, 13:00, 18:00, 21:00 UTC (~8pm, 8am, 1pm, 6pm ET)
+name: Tweet schedule
+
+on:
+  schedule:
+    - cron: '0 1,13,18,21 * * *'
+  workflow_dispatch: # allow manual run from Actions tab
+
+jobs:
+  tweet:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # push tweeted_urls.txt after run
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run twitter bot
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python -m twitter_bot.run
+
+      - name: Commit tweeted_urls if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add twitter_bot/data/tweeted_urls.txt 2>/dev/null || true
+          git diff --staged --quiet || (git commit -m "chore(bot): update tweeted_urls after scheduled run" && git push)

@@ -48,8 +48,9 @@ Thumbs.db
 /tmp/
 *.log.*
 
-# Environment variables
+# Environment variables (never commit secrets)
 .env
+.env_x
 .env.local
 .env.*.local
 
@@ -79,3 +80,7 @@ docs/_build/
 # Local development
 flask_output.log
 /tmp/flask_output.log
+
+# Twitter bot: ignore data dir except tweeted_urls (workflow commits that file)
+twitter_bot/data/
+!twitter_bot/data/tweeted_urls.txt

@@ -2,15 +2,15 @@
 
 The site has **ad slots** on every team page (leaderboard 728×90 above the news grid). To turn them into revenue:
 
-## AdSense and aggregation / “repost” content
+## AdSense and aggregation / "repost" content
 
-Google’s policy says you **cannot** run AdSense on pages that are *only* “embedded or copied content from others without additional commentary, curation, or otherwise adding value.” Pure reposts with no added value can get rejected or disabled.
+Google's policy says you **cannot** run AdSense on pages that are *only* "embedded or copied content from others without additional commentary, curation, or otherwise adding value." Pure reposts with no added value can get rejected or disabled.
 
 Your site **does** add value: you **curate** (pick which articles to show), **organize by team**, and provide a **single dashboard** with headlines, blurbs, and source attribution. Many aggregation/curation sites are approved. To improve your chances:
 
-- Keep **clear source attribution** (e.g. “-- NBC Sports Philadelphia”, “-- PhillyVoice”) on every card.
+- Keep **clear source attribution** (e.g. "-- NBC Sports Philadelphia", "-- PhillyVoice") on every card.
 - Consider adding **short original commentary** (e.g. one line per article) or a brief intro per team.
-- Ensure each page has a **distinct purpose** (e.g. “Sixers news” with your selection of links), not just a copy of one other page.
+- Ensure each page has a **distinct purpose** (e.g. "Sixers news" with your selection of links), not just a copy of one other page.
 
 Apply and let Google review; they approve many curated news hubs. If you get a rejection, you can add more original value and reapply.
 
