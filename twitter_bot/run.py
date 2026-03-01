@@ -261,14 +261,14 @@ Rules for this tweet:
 - tweet_text MUST be at most 280 characters.
 - tweet_text MUST include the exact article_url you choose and "phillysportdaily.com".
 - article_url MUST be one of the exact URLs from the list below (copy character-for-character).
-- Base the tweet on the headline and blurb; add your own reaction or hook in your voice.
+- DO NOT just repeat or paraphrase the headline. The tweet must lead with YOUR reaction, take, joke, question, or angle (e.g. "BREAKING:", "This is wild.", "So we're doing this again?", a stat, or sarcasm)—then reference the story and include the link. If the tweet could be mistaken for a news headline, rewrite it to add your voice.
 - The list below contains only articles we have NOT tweeted yet; pick one of these."""
 
     user = """Use ONLY the following articles. Pick one and use its exact URL.
 
 {articles_block}
 
-Respond with tweet_text (full tweet, under 280 chars, in your voice, including the article URL and phillysportdaily.com), article_url (exact URL from the list), and headline_used (exact headline)."""
+Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and phillysportdaily.com. Respond with tweet_text (full tweet, under 280 chars), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
@@ -292,7 +292,8 @@ Respond with tweet_text (full tweet, under 280 chars, in your voice, including t
 # Post to X
 # ---------------------------------------------------------------------------
 
-def post_tweet(text: str) -> bool:
+def post_tweet(text: str) -> tuple[bool, str | None]:
+    """Returns (success, error_hint). error_hint is e.g. '503' or '429' when X is down/rate-limited."""
     import time
     import tweepy
 
@@ -303,7 +304,7 @@ def post_tweet(text: str) -> bool:
 
     if not all((api_key, api_secret, access, access_secret)):
         print("Missing X credentials. Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET in .env_x (repo root)", file=sys.stderr)
-        return False
+        return False, None
 
     client = tweepy.Client(
         consumer_key=api_key,
@@ -315,13 +316,15 @@ def post_tweet(text: str) -> bool:
         text = text[:277] + "..."
 
     max_attempts = 3
+    last_err = None
     for attempt in range(1, max_attempts + 1):
         try:
             resp = client.create_tweet(text=text)
             print(f"Posted tweet id: {resp.data['id']}")
-            return True
+            return True, None
         except Exception as e:
             err_str = str(e).lower()
+            last_err = err_str
             is_retryable = "503" in err_str or "429" in err_str or "service unavailable" in err_str or "rate limit" in err_str
             if is_retryable and attempt < max_attempts:
                 wait = 10 * attempt
@@ -329,8 +332,10 @@ def post_tweet(text: str) -> bool:
                 time.sleep(wait)
             else:
                 print(f"Post failed: {e}", file=sys.stderr)
-                return False
-    return False
+                hint = "503" if "503" in err_str or "service unavailable" in err_str else ("429" if "429" in err_str or "rate limit" in err_str else None)
+                return False, hint
+    hint = "503" if last_err and ("503" in last_err or "service unavailable" in last_err) else ("429" if last_err and ("429" in last_err or "rate limit" in last_err) else None)
+    return False, hint
 
 
 # ---------------------------------------------------------------------------
@@ -376,10 +381,14 @@ def main():
     print(f"Article URL: {out.article_url}")
     print(f"Headline: {out.headline_used[:60]}...")
 
-    if post_tweet(tweet):
+    success, hint = post_tweet(tweet)
+    if success:
         _append_tweeted_url(out.article_url)
         print("Done.")
     else:
+        if hint in ("503", "429"):
+            print("X API unavailable (503/429). Will retry next scheduled run.", file=sys.stderr)
+            sys.exit(0)
         sys.exit(1)
 
 
