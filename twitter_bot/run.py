@@ -327,7 +327,16 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
             last_err = err_str
             is_retryable = "503" in err_str or "429" in err_str or "service unavailable" in err_str or "rate limit" in err_str
             if is_retryable and attempt < max_attempts:
-                wait = 10 * attempt
+                wait = 10 * attempt  # default backoff
+                try:
+                    if hasattr(e, "response") and e.response is not None:
+                        headers = getattr(e.response, "headers", None)
+                        if headers is not None and hasattr(headers, "get"):
+                            ra = headers.get("Retry-After")
+                            if ra is not None:
+                                wait = min(int(ra) if str(ra).isdigit() else 60, 120)
+                except (TypeError, ValueError):
+                    pass
                 print(f"Post attempt {attempt} failed ({e}). Retrying in {wait}s...", file=sys.stderr)
                 time.sleep(wait)
             else:
