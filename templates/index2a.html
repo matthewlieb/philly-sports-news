@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,700" rel="stylesheet"> <!-- include font -->
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
-    <link href="static/phillySports.css"  rel="stylesheet">
+    <link href="/static/phillySports.css"  rel="stylesheet">
     <script>
       (function (w,d,s,o,f,js,fjs) {
           w['SBDOddsWidget']=o;w[o] = w[o] || function () { (w[o].q = w[o].q || []).push(arguments) };
@@ -69,11 +69,25 @@
 
     <div class="container">
 
-      <div class="row d-flex justify-content-center">
-        <div class="col-12">
-          <!-- Add the embed code here -->
+      <div class="row d-flex justify-content-center youtube-row">
+        <div class="col-12 col-lg-10">
+          {% if embed_code1 %}
           <div class="embed-responsive embed-responsive-16by9 mx-auto">
             {{ embed_code1 | safe }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Ad slot: replace with your AdSense or other ad code -->
+      <div class="row ad-slot-row">
+        <div class="col-12 text-center">
+          <div class="ad-slot ad-slot-leaderboard" data-ad-type="leaderboard">
+            <!-- Google AdSense: uncomment and set your ca-pub ID -->
+            <!-- <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-XXXXXXXXXX" crossorigin="anonymous"></script>
+            <ins class="adsbygoogle" style="display:inline-block;width:728px;height:90px" data-ad-client="ca-pub-XXXXXXXXXX" data-ad-slot="XXXXXXXXXX"></ins>
+            <script>(adsbygoogle = window.adsbygoogle || []).push({});</script> -->
+            <span class="ad-placeholder">Ad space (728×90)</span>
           </div>
         </div>
       </div>
@@ -81,7 +95,7 @@
       <div class="row row1">
         <div class="col-lg-4 col-md-6 col-sm-6">
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS1a[0] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS1a[0] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls1a[0] }}" target="_blank"><h3>{{ column1a[0] }}</h3></a>
               <p> {{ blurbs1a[0] }}  </p>
@@ -89,7 +103,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS2a[0] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS2a[0] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls2a[0] }}" target="_blank"><h3>{{ column2a[0] }}</h3></a>
               <p> {{ blurbs2a[0] }}  </p>
@@ -97,7 +111,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS3a[0] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS3a[0] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls3a[0] }}" target="_blank"><h3>{{ column3a[0] }}</h3></a>
               <p> {{ blurbs3a[0] }}  </p>
@@ -105,7 +119,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS4a[0] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS4a[0] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls4a[0] }}" target="_blank"><h3>{{ column4a[0] }}</h3></a>
               <p> {{ blurbs4a[0] }}  </p>
@@ -113,7 +127,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS5a[0] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS5a[0] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls5a[0] }}" target="_blank"><h3>{{ column5a[0] }}</h3></a>
               <p> {{ blurbs5a[0] }}  </p>
@@ -125,7 +139,7 @@
         <div class="col-lg-4 col-md-6 col-sm-6">
 
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS3a[1] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS3a[1] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls3a[1] }}" target="_blank"><h3>{{ column3a[1] }}</h3></a>
               <p> {{ blurbs3a[1] }}  </p>
@@ -133,7 +147,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS2a[1] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS2a[1] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls2a[1] }}" target="_blank"><h3>{{ column2a[1] }}</h3></a>
               <p> {{ blurbs2a[1] }}  </p>
@@ -141,7 +155,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS4a[1] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS4a[1] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls4a[1] }}" target="_blank"><h3>{{ column4a[1] }}</h3></a>
               <p> {{ blurbs4a[1] }}  </p>
@@ -149,7 +163,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS5a[1] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS5a[1] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls5a[1] }}" target="_blank"><h3>{{ column5a[1] }}</h3></a>
               <p> {{ blurbs5a[1] }}  </p>
@@ -157,7 +171,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS1a[1] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS1a[1] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls1a[1] }}" target="_blank"><h3>{{ column1a[1] }}</h3></a>
               <p> {{ blurbs1a[1] }}  </p>
@@ -168,7 +182,7 @@
 
         <div class="col-lg-4 col-md-6 col-sm-6 odds-col">
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS5a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS5a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls5a[3] }}" target="_blank"><h3>{{ column5a[3] }}</h3></a>
               <p> {{ blurbs5a[3] }}  </p>
@@ -176,7 +190,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS3a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS3a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls3a[3] }}" target="_blank"><h3>{{ column3a[3] }}</h3></a>
               <p> {{ blurbs3a[3] }}  </p>
@@ -199,7 +213,7 @@
         <div class="col-lg-4 col-md-6 col-sm-6">
           
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS2a[2] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS2a[2] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls2a[2] }}" target="_blank"><h3>{{ column2a[2] }}</h3></a>
               <p> {{ blurbs2a[2] }}  </p>
@@ -207,7 +221,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS1a[2] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS1a[2] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls1a[2] }}" target="_blank"><h3>{{ column1a[2] }}</h3></a>
               <p> {{ blurbs1a[2] }}  </p>
@@ -215,7 +229,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS4a[2] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS4a[2] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls4a[2] }}" target="_blank"><h3>{{ column4a[2] }}</h3></a>
               <p> {{ blurbs4a[2] }}  </p>
@@ -223,7 +237,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS3a[2] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS3a[2] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls3a[2] }}" target="_blank"><h3>{{ column3a[2] }}</h3></a>
               <p> {{ blurbs3a[2] }}  </p>
@@ -231,7 +245,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS5a[2] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS5a[2] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls5a[2] }}" target="_blank"><h3>{{ column5a[2] }}</h3></a>
               <p> {{ blurbs5a[2] }}  </p>
@@ -242,7 +256,7 @@
 
         <div class="col-lg-4 col-md-6 col-sm-6">
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS2a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS2a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls2a[3] }}" target="_blank"><h3>{{ column2a[3] }}</h3></a>
               <p> {{ blurbs2a[3] }}  </p>
@@ -250,7 +264,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS5a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS5a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls5a[3] }}" target="_blank"><h3>{{ column5a[3] }}</h3></a>
               <p> {{ blurbs5a[3] }}  </p>
@@ -258,7 +272,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS1a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS1a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls1a[3] }}" target="_blank"><h3>{{ column1a[3] }}</h3></a>
               <p> {{ blurbs1a[3] }}  </p>
@@ -266,7 +280,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS3a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS3a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls3a[3] }}" target="_blank"><h3>{{ column3a[3] }}</h3></a>
               <p> {{ blurbs3a[3] }}  </p>
@@ -274,7 +288,7 @@
             </div>
           </div>
           <div class ="card sixers-card">
-            <img class="card-img-top" src="{{ imageURLS4a[3] }}" alt="Sixers News" onerror="this.src='static/phillySportsNewsSixers.png'">
+            <img class="card-img-top" src="{{ imageURLS4a[3] }}" alt="Sixers News" onerror="this.src='/static/phillySportsNewsSixers.png'">
             <div class="card-body">
               <a href="{{ urls4a[3] }}" target="_blank"><h3>{{ column4a[3] }}</h3></a>
               <p> {{ blurbs4a[3] }}  </p>

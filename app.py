@@ -1,21 +1,37 @@
+# Load .env so API_KEY and other vars are available (e.g. for YouTube embeds)
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Fallback: if python-dotenv not installed, load .env manually from project root
+import os as _os
+_env_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), ".env")
+if _os.path.isfile(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _, _v = _line.partition("=")
+                _k, _v = _k.strip(), _v.strip().strip("'\"").strip()
+                if _k and _v and _k not in _os.environ:
+                    _os.environ[_k] = _v
+                    if _k == "api_key":
+                        _os.environ["API_KEY"] = _v
+
 import random
 from typing import List, Tuple
 from jinja2 import Template
-from rateLimiter import *
-from youtubeUtils import get_embeddable_video_id, create_safe_embed_code
+from lib.rate_limiter import *
+from lib.youtube_utils import get_embeddable_video_id, create_safe_embed_code
 from flask import Flask
 from flask_caching import Cache
 from utils.article_filter import filter_complete_articles, get_source_name_from_url, merge_and_rank_articles
+import lib.config as config
 
-from sbNationScrape import *
-from nbcPhiladelphiaScrape import *
-from phillyVoiceScrape import *
-from fansidedScrape import * 
-
-from eaglesScrape import *
-from sixersScrape import *
-from philliesScrape import *
-from flyersScrape import *
+from scrapers.source_collectors import collect_articles_for_team
+from lib.article_enhancer import enhance_article_data
 
 app = Flask(__name__)
 
@@ -99,41 +115,20 @@ def create_dict(titles, urls):
 @cache.cached(timeout=3600, key_prefix='eagles_articles')
 def get_eagles_articles():
     """
-    Get Eagles articles with caching.
+    Get Eagles articles with caching. Fetches on demand from all sources.
     Cache expires after 1 hour.
     """
-    # Handle cases where authors might not be defined
-    try:
-        authors2
-    except NameError:
-        authors2 = []
-    
-    try:
-        authors3
-    except NameError:
-        authors3 = []
-    
-    try:
-        authors4
-    except NameError:
-        authors4 = []
-    
-    try:
-        authors5
-    except NameError:
-        authors5 = []
-    
-    # Merge articles from all sources
-    article_sources = [
-        {'titles': titles1, 'urls': urls1, 'images': imageURLS1, 'blurbs': blurbs1, 'authors': authors1},
-        {'titles': titles2, 'urls': urls2, 'images': imageURLS2, 'blurbs': blurbs2, 'authors': authors2},
-        {'titles': titles3, 'urls': urls3, 'images': imageURLS3, 'blurbs': blurbs3, 'authors': authors3},
-        {'titles': titles4, 'urls': urls4, 'images': imageURLS4, 'blurbs': blurbs4, 'authors': authors4},
-        {'titles': titles5, 'urls': urls5, 'images': imageURLS5, 'blurbs': blurbs5, 'authors': authors5}
-    ]
-    
-    # Merge and get only fully populated articles, ranked by quality
-    return merge_articles_from_sources(article_sources)
+    article_sources = collect_articles_for_team("eagles")
+    if not article_sources:
+        return [], [], [], [], []
+    merged = merge_articles_from_sources(article_sources)
+    # Optionally enhance top articles for better images/descriptions
+    titles, urls, images, blurbs, authors = merged
+    if titles and urls:
+        titles, urls, images, blurbs, authors = enhance_article_data(
+            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+        )
+    return titles, urls, images, blurbs, authors
 
 @app.route('/')
 def home():
@@ -210,19 +205,18 @@ def home():
 @cache.cached(timeout=3600, key_prefix='sixers_articles')
 def get_sixers_articles():
     """
-    Get Sixers articles with caching.
-    Cache expires after 1 hour.
+    Get Sixers articles with caching. Fetches on demand from all sources.
     """
-    article_sources = [
-        {'titles': titles1a, 'urls': urls1a, 'images': imageURLS1a, 'blurbs': blurbs1a, 'authors': authors1a},
-        {'titles': titles2a, 'urls': urls2a, 'images': imageURLS2a, 'blurbs': blurbs2a, 'authors': authors2a},
-        {'titles': titles3a, 'urls': urls3a, 'images': imageURLS3a, 'blurbs': blurbs3a, 'authors': authors3a},
-        {'titles': titles4a, 'urls': urls4a, 'images': imageURLS4a, 'blurbs': blurbs4a, 'authors': authors4a},
-        {'titles': titles5a, 'urls': urls5a, 'images': imageURLS5a, 'blurbs': blurbs5a, 'authors': authors5a}
-    ]
-    
-    # Merge and get only fully populated articles, ranked by quality
-    return merge_articles_from_sources(article_sources)
+    article_sources = collect_articles_for_team("sixers")
+    if not article_sources:
+        return [], [], [], [], []
+    merged = merge_articles_from_sources(article_sources)
+    titles, urls, images, blurbs, authors = merged
+    if titles and urls:
+        titles, urls, images, blurbs, authors = enhance_article_data(
+            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+        )
+    return titles, urls, images, blurbs, authors
 
 @app.route('/sixers')
 def sixers():
@@ -281,8 +275,9 @@ def sixers():
     keys1 = list(shuffled_dict.keys())
     values1 = list(shuffled_dict.values())
 
-    # Get a valid embeddable YouTube video
-    video_id = get_embeddable_video_id('sixers', api_key)
+    video_id = None
+    if config.api_key:
+        video_id = get_embeddable_video_id('sixers', config.api_key)
     embed_code1 = create_safe_embed_code(video_id, 'Philadelphia 76ers')
 
     # Read the contents of the template file into a string
@@ -301,19 +296,18 @@ def sixers():
 @cache.cached(timeout=3600, key_prefix='phillies_articles')
 def get_phillies_articles():
     """
-    Get Phillies articles with caching.
-    Cache expires after 1 hour.
+    Get Phillies articles with caching. Fetches on demand from all sources.
     """
-    article_sources = [
-        {'titles': titles1b, 'urls': urls1b, 'images': imageURLS1b, 'blurbs': blurbs1b, 'authors': authors1b},
-        {'titles': titles2b, 'urls': urls2b, 'images': imageURLS2b, 'blurbs': blurbs2b, 'authors': authors2b},
-        {'titles': titles3b, 'urls': urls3b, 'images': imageURLS3b, 'blurbs': blurbs3b, 'authors': authors3b},
-        {'titles': titles4b, 'urls': urls4b, 'images': imageURLS4b, 'blurbs': blurbs4b, 'authors': authors4b},
-        {'titles': titles5b, 'urls': urls5b, 'images': imageURLS5b, 'blurbs': blurbs5b, 'authors': authors5b}
-    ]
-    
-    # Merge and get only fully populated articles, ranked by quality
-    return merge_articles_from_sources(article_sources)
+    article_sources = collect_articles_for_team("phillies")
+    if not article_sources:
+        return [], [], [], [], []
+    merged = merge_articles_from_sources(article_sources)
+    titles, urls, images, blurbs, authors = merged
+    if titles and urls:
+        titles, urls, images, blurbs, authors = enhance_article_data(
+            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+        )
+    return titles, urls, images, blurbs, authors
 
 @app.route('/phillies')
 def phillies():
@@ -390,19 +384,18 @@ def phillies():
 @cache.cached(timeout=3600, key_prefix='flyers_articles')
 def get_flyers_articles():
     """
-    Get Flyers articles with caching.
-    Cache expires after 1 hour.
+    Get Flyers articles with caching. Fetches on demand from all sources.
     """
-    article_sources = [
-        {'titles': titles1c, 'urls': urls1c, 'images': imageURLS1c, 'blurbs': blurbs1c, 'authors': authors1c},
-        {'titles': titles2c, 'urls': urls2c, 'images': imageURLS2c, 'blurbs': blurbs2c, 'authors': authors2c},
-        {'titles': titles3c, 'urls': urls3c, 'images': imageURLS3c, 'blurbs': blurbs3c, 'authors': authors3c},
-        {'titles': titles4c, 'urls': urls4c, 'images': imageURLS4c, 'blurbs': blurbs4c, 'authors': authors4c},
-        {'titles': titles5c, 'urls': urls5c, 'images': imageURLS5c, 'blurbs': blurbs5c, 'authors': authors5c}
-    ]
-    
-    # Merge and get only fully populated articles, ranked by quality
-    return merge_articles_from_sources(article_sources)
+    article_sources = collect_articles_for_team("flyers")
+    if not article_sources:
+        return [], [], [], [], []
+    merged = merge_articles_from_sources(article_sources)
+    titles, urls, images, blurbs, authors = merged
+    if titles and urls:
+        titles, urls, images, blurbs, authors = enhance_article_data(
+            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+        )
+    return titles, urls, images, blurbs, authors
 
 @app.route('/flyers')
 def flyers():
