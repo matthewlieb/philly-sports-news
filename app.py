@@ -108,6 +108,11 @@ def merge_articles_from_sources(article_sources: List[dict]) -> Tuple[List[str],
     
     return filtered_titles, filtered_urls, filtered_images, filtered_blurbs, filtered_authors
 
+@app.route('/health')
+def health():
+    """Lightweight health check; no scraping. Use for Heroku/load balancer."""
+    return 'ok', 200
+
 def create_dict(titles, urls):
 
     return {k: v for k, v in zip(titles[:5], urls[:5])}
