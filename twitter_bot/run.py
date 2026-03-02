@@ -291,11 +291,61 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
 # ---------------------------------------------------------------------------
 # Post to X
 # ---------------------------------------------------------------------------
+# Uses official X SDK (xdk) first — api.x.com per docs.x.com. Falls back to
+# Tweepy (api.twitter.com) if xdk fails. Both use OAuth 1.0a, same credentials.
+
+def _post_via_xdk(text: str, api_key: str, api_secret: str, access: str, access_secret: str) -> tuple[bool, str | None]:
+    """Post via official X SDK (api.x.com). Returns (success, error_hint)."""
+    try:
+        from xdk import Client
+        from xdk.oauth1_auth import OAuth1
+        from xdk.posts.models import CreateRequest
+
+        oauth1 = OAuth1(
+            api_key=api_key,
+            api_secret=api_secret,
+            callback="oob",
+            access_token=access,
+            access_token_secret=access_secret,
+        )
+        client = Client(auth=oauth1)
+        resp = client.posts.create(CreateRequest(text=text))
+        data = resp.get("data") if isinstance(resp, dict) else getattr(resp, "data", None)
+        if data:
+            tid = data.get("id") if isinstance(data, dict) else getattr(data, "id", None)
+            if tid:
+                print(f"Posted tweet id: {tid} (via xdk/api.x.com)")
+                return True, None
+        return False, "No tweet id in response"
+    except Exception as e:
+        err_str = str(e).lower()
+        hint = "503" if "503" in err_str or "service unavailable" in err_str else ("429" if "429" in err_str or "rate limit" in err_str else None)
+        return False, hint or str(e)
+
+
+def _post_via_tweepy(text: str, api_key: str, api_secret: str, access: str, access_secret: str) -> tuple[bool, str | None]:
+    """Post via Tweepy (api.twitter.com). Returns (success, error_hint)."""
+    import tweepy
+
+    client = tweepy.Client(
+        consumer_key=api_key,
+        consumer_secret=api_secret,
+        access_token=access,
+        access_token_secret=access_secret,
+    )
+    try:
+        resp = client.create_tweet(text=text)
+        print(f"Posted tweet id: {resp.data['id']} (via tweepy/api.twitter.com)")
+        return True, None
+    except Exception as e:
+        err_str = str(e).lower()
+        hint = "503" if "503" in err_str or "service unavailable" in err_str else ("429" if "429" in err_str or "rate limit" in err_str else None)
+        return False, hint or str(e)
+
 
 def post_tweet(text: str) -> tuple[bool, str | None]:
-    """Returns (success, error_hint). error_hint is e.g. '503' or '429' when X is down/rate-limited."""
+    """Returns (success, error_hint). Tries xdk (api.x.com) then tweepy (api.twitter.com) with retries."""
     import time
-    import tweepy
 
     api_key = os.environ.get("X_API_KEY") or os.environ.get("X_CONSUMER_KEY")
     api_secret = os.environ.get("X_API_SECRET") or os.environ.get("X_CONSUMER_SECRET")
@@ -306,44 +356,35 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
         print("Missing X credentials. Set X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET in .env_x (repo root)", file=sys.stderr)
         return False, None
 
-    client = tweepy.Client(
-        consumer_key=api_key,
-        consumer_secret=api_secret,
-        access_token=access,
-        access_token_secret=access_secret,
-    )
     if len(text) > 280:
         text = text[:277] + "..."
 
-    max_attempts = 3
+    max_attempts = 6
+    base_wait = 5
     last_err = None
+    backends = [
+        ("xdk (api.x.com)", lambda: _post_via_xdk(text, api_key, api_secret, access, access_secret)),
+        ("tweepy (api.twitter.com)", lambda: _post_via_tweepy(text, api_key, api_secret, access, access_secret)),
+    ]
+
+    is_retryable = True
     for attempt in range(1, max_attempts + 1):
-        try:
-            resp = client.create_tweet(text=text)
-            print(f"Posted tweet id: {resp.data['id']}")
-            return True, None
-        except Exception as e:
-            err_str = str(e).lower()
-            last_err = err_str
-            is_retryable = "503" in err_str or "429" in err_str or "service unavailable" in err_str or "rate limit" in err_str
-            if is_retryable and attempt < max_attempts:
-                wait = 10 * attempt  # default backoff
-                try:
-                    if hasattr(e, "response") and e.response is not None:
-                        headers = getattr(e.response, "headers", None)
-                        if headers is not None and hasattr(headers, "get"):
-                            ra = headers.get("Retry-After")
-                            if ra is not None:
-                                wait = min(int(ra) if str(ra).isdigit() else 60, 120)
-                except (TypeError, ValueError):
-                    pass
-                print(f"Post attempt {attempt} failed ({e}). Retrying in {wait}s...", file=sys.stderr)
-                time.sleep(wait)
-            else:
-                print(f"Post failed: {e}", file=sys.stderr)
-                hint = "503" if "503" in err_str or "service unavailable" in err_str else ("429" if "429" in err_str or "rate limit" in err_str else None)
-                return False, hint
-    hint = "503" if last_err and ("503" in last_err or "service unavailable" in last_err) else ("429" if last_err and ("429" in last_err or "rate limit" in last_err) else None)
+        for name, post_fn in backends:
+            success, hint = post_fn()
+            if success:
+                return True, None
+            last_err = hint
+            err_lower = (hint or "").lower()
+            is_retryable = "503" in err_lower or "429" in err_lower or "service unavailable" in err_lower or "rate limit" in err_lower
+            print(f"Post via {name} failed ({hint})", file=sys.stderr)
+
+        if attempt < max_attempts and is_retryable:
+            wait = base_wait * (2 ** (attempt - 1))
+            print(f"Retrying in {wait}s (attempt {attempt}/{max_attempts})...", file=sys.stderr)
+            time.sleep(wait)
+
+    hint = "503" if last_err and ("503" in str(last_err).lower() or "service unavailable" in str(last_err).lower()) else ("429" if last_err and ("429" in str(last_err).lower() or "rate limit" in str(last_err).lower()) else None)
+    print(f"Post failed: {last_err}", file=sys.stderr)
     return False, hint
 
 

@@ -10,7 +10,9 @@ pip install -r requirements.txt   # includes tweepy, langchain-openai, langchain
 python -m twitter_bot.run
 ```
 
-**Test X without posting:** `python -m twitter_bot.test_x` — verifies credentials. If it prints "X API OK", keys are fine. 503 when posting is a known intermittent X API issue; retry later.
+**Test X without posting:** `python -m twitter_bot.test_x` — verifies credentials. If it prints "X API OK", keys are fine.
+
+**Test posting with 503 workaround:** `python -m twitter_bot.test_post_503` — posts a test tweet with exponential backoff (6 attempts over ~5 min). Use `--dry-run` to verify keys only, `--xdk` to use official X SDK (api.x.com) instead of Tweepy (api.twitter.com), or `--persist` to retry every 5 min until X accepts the post.
 
 Env is loaded from the repo root: `.env_x` (or `.env`). Required keys:
 

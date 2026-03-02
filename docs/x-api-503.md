@@ -2,6 +2,15 @@
 
 A **503** from the X API means their server couldn’t handle the request (temporary). It’s not an issue with your app or credentials.
 
+## API setup (up to date)
+
+We use the [official X API v2](https://docs.x.com/x-api/posts/create-post) (`POST /2/tweets`):
+
+- **Primary:** [xdk](https://pypi.org/project/xdk/) (official X SDK) → `https://api.x.com`
+- **Fallback:** [Tweepy](https://docs.tweepy.org/) → `https://api.twitter.com`
+
+Both use OAuth 1.0a with the same credentials. The bot tries xdk first, then Tweepy, with exponential backoff.
+
 ## Common causes
 
 - **Server overload or maintenance** — X’s servers are busy or under maintenance.
@@ -13,7 +22,7 @@ A **503** from the X API means their server couldn’t handle the request (tempo
 
 ## What we do in this project
 
-- **Retry with backoff** — Up to 3 attempts with 10s, 20s (or `Retry-After` if X sends it, capped at 120s).
+- **Retry with exponential backoff** — Up to 6 attempts: 5s, 10s, 20s, 40s, 80s, 160s (or `Retry-After` if X sends it, capped at 180s). X recommends exponential backoff for 503.
 - **Soft failure** — If the only error is 503 or 429, the job exits successfully so the next scheduled run tries again.
 - **No rapid repeated calls** — One tweet per run; scheduler runs at most a few times per day.
 
