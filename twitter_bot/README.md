@@ -19,11 +19,28 @@ Env is loaded from the repo root: `.env_x` (or `.env`). Required keys:
 - `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`
 - `OPENAI_API_KEY`
 
+Optional:
+
+- `TAVILY_API_KEY` – for standalone/trending tweets (search). Without it, standalone tweets use fallback context.
+
+## Content types (varied automatically)
+
+Each run picks one:
+
+- **article** (~55%) – React to a scraped article, include link + phillysportdaily.com
+- **satire_image** (~25%) – Same as article, plus a DALL·E 3–generated satire image
+- **standalone** (~20%) – No article link; comment on trending Philly sports (Tavily search)
+
+State is tracked in `data/last_content_type.txt` to avoid streaks.
+
 ## Layout
 
-- `run.py` – entry point: fetch articles, generate tweet (LangChain + voice), post (Tweepy).
+- `run.py` – entry point: choose content type, fetch/generate, post (Tweepy/xdk).
 - `config/voice.py` – `VOICE_DESCRIPTION` and `EXAMPLE_TWEETS`. Edit to match your voice.
+- `config/image_prompts.py` – Satire image prompt templates for DALL·E 3.
 - `data/tweeted_urls.txt` – URLs we already tweeted (no reuse); trimmed to last 500.
+- `data/last_tweeted_team.txt` – Last team tweeted (Eagles/Sixers/Phillies/Flyers rotation).
+- `data/last_content_type.txt` – Last content type (article/satire_image/standalone).
 - `docs/` – bot-specific docs (e.g. satire-images.md).
 
 ## Scheduling

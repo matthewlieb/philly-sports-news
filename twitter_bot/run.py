@@ -81,6 +81,7 @@ def _build_all_articles():
                         "description": (blurbs[i] if i < len(blurbs) else "").strip(),
                         "author": authors[i] if i < len(authors) else "-- Unknown",
                         "source": get_source_name_from_url(url),
+                        "team": team,
                     })
         except Exception as e:
             print(f"Warning: collect_articles_for_team({team}) failed: {e}", file=sys.stderr)
@@ -95,7 +96,15 @@ def _build_all_articles():
 # ---------------------------------------------------------------------------
 
 _TWEETED_URLS_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "tweeted_urls.txt")
+_LAST_TWEETED_TEAM_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "last_tweeted_team.txt")
+_LAST_CONTENT_TYPE_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "last_content_type.txt")
 _MAX_TWEETED_URLS = 500
+_PHILLYSPORTDAILY_SUFFIX = " phillysportdaily.com"  # 22 chars
+
+# Content types: article (link), satire_image (article + generated image), standalone (trending, no article)
+CONTENT_TYPES = ("article", "satire_image", "standalone")
+# Weights: article 55%, satire_image 25%, standalone 20%. Avoid streaks by down-weighting last type.
+_CONTENT_WEIGHTS = {"article": 0.55, "satire_image": 0.25, "standalone": 0.20}
 
 
 def _load_tweeted_urls() -> set[str]:
@@ -202,6 +211,74 @@ def _append_tweeted_url_to_db(url: str) -> None:
         print(f"Warning: could not save tweeted URL to DB: {e}", file=sys.stderr)
 
 
+def _load_last_tweeted_team() -> str | None:
+    """Load last tweeted team for sports rotation."""
+    if not os.path.isfile(_LAST_TWEETED_TEAM_FILE):
+        return None
+    try:
+        with open(_LAST_TWEETED_TEAM_FILE) as f:
+            t = f.read().strip().lower()
+            return t if t in ("eagles", "sixers", "phillies", "flyers") else None
+    except OSError:
+        return None
+
+
+def _save_last_tweeted_team(team: str) -> None:
+    """Save last tweeted team for sports rotation."""
+    team = (team or "").strip().lower()
+    if team not in ("eagles", "sixers", "phillies", "flyers"):
+        return
+    try:
+        os.makedirs(os.path.dirname(_LAST_TWEETED_TEAM_FILE), exist_ok=True)
+        with open(_LAST_TWEETED_TEAM_FILE, "w") as f:
+            f.write(team + "\n")
+    except OSError as e:
+        print(f"Warning: could not save last tweeted team: {e}", file=sys.stderr)
+
+
+def _load_last_content_type() -> str | None:
+    """Load last content type for variety (avoid streaks)."""
+    if not os.path.isfile(_LAST_CONTENT_TYPE_FILE):
+        return None
+    try:
+        with open(_LAST_CONTENT_TYPE_FILE) as f:
+            t = f.read().strip().lower()
+            return t if t in CONTENT_TYPES else None
+    except OSError:
+        return None
+
+
+def _save_last_content_type(content_type: str) -> None:
+    """Save last content type for variety."""
+    if content_type not in CONTENT_TYPES:
+        return
+    try:
+        os.makedirs(os.path.dirname(_LAST_CONTENT_TYPE_FILE), exist_ok=True)
+        with open(_LAST_CONTENT_TYPE_FILE, "w") as f:
+            f.write(content_type + "\n")
+    except OSError as e:
+        print(f"Warning: could not save last content type: {e}", file=sys.stderr)
+
+
+def choose_content_type() -> str:
+    """Pick content type with weighted random, down-weighting last type to avoid streaks."""
+    import random
+    last = _load_last_content_type()
+    weights = list(_CONTENT_WEIGHTS.items())
+    if last:
+        # Reduce weight of last type by half
+        adjusted = []
+        for ct, w in weights:
+            if ct == last:
+                adjusted.append((ct, w * 0.5))
+            else:
+                adjusted.append((ct, w))
+        total = sum(w for _, w in adjusted)
+        weights = [(ct, w / total) for ct, w in adjusted]
+    choices, probs = zip(*weights)
+    return random.choices(choices, weights=probs, k=1)[0]
+
+
 # ---------------------------------------------------------------------------
 # LangChain: structured output + voice (Matthew Lieb via config)
 # ---------------------------------------------------------------------------
@@ -226,7 +303,7 @@ def _get_voice_prompt_block():
 
 class TweetOutput(BaseModel):
     tweet_text: str = Field(
-        description="The tweet text, max 280 characters. Must include the exact article_url below and phillysportdaily.com. Be concise, Philly fan voice."
+        description="The tweet text, max 250 characters. Must include the exact article_url below and phillysportdaily.com. Be concise."
     )
     article_url: str = Field(
         description="One of the exact article URLs from the list above. Copy it character-for-character."
@@ -236,7 +313,7 @@ class TweetOutput(BaseModel):
     )
 
 
-def generate_tweet(articles: list[dict], openai_api_key: str) -> TweetOutput | None:
+def generate_tweet(articles: list[dict], openai_api_key: str, last_tweeted_team: str | None = None) -> TweetOutput | None:
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
 
@@ -248,8 +325,10 @@ def generate_tweet(articles: list[dict], openai_api_key: str) -> TweetOutput | N
         title = (a.get("title") or "").strip()
         url = (a.get("url") or "").strip()
         blurb = (a.get("description") or "")[:200].strip()
+        team = (a.get("team") or "").strip()
         if title and url:
-            lines.append(f"{i}. HEADLINE: {title}\n   URL: {url}\n   BLURB: {blurb}")
+            team_tag = f" [TEAM: {team}]" if team else ""
+            lines.append(f"{i}. HEADLINE: {title}\n   URL: {url}\n   BLURB: {blurb}{team_tag}")
 
     articles_block = "\n\n".join(lines) if lines else "No articles."
     allowed_urls = [a.get("url", "").strip() for a in articles if a.get("url")]
@@ -258,17 +337,23 @@ def generate_tweet(articles: list[dict], openai_api_key: str) -> TweetOutput | N
     system = """{voice_block}
 
 Rules for this tweet:
-- tweet_text MUST be at most 280 characters.
+- tweet_text MUST be at most 250 characters total (including the article URL and phillysportdaily.com) to avoid truncation.
 - tweet_text MUST include the exact article_url you choose and "phillysportdaily.com".
 - article_url MUST be one of the exact URLs from the list below (copy character-for-character).
 - DO NOT just repeat or paraphrase the headline. The tweet must lead with YOUR reaction, take, joke, question, or angle (e.g. "BREAKING:", "This is wild.", "So we're doing this again?", a stat, or sarcasm)—then reference the story and include the link. If the tweet could be mistaken for a news headline, rewrite it to add your voice.
-- The list below contains only articles we have NOT tweeted yet; pick one of these."""
+- The list below contains only articles we have NOT tweeted yet; pick one of these.
+- Rotate coverage: prefer articles from Eagles, Sixers, Phillies, or Flyers we have NOT tweeted recently. Cover all four Philly sports over time."""
 
-    user = """Use ONLY the following articles. Pick one and use its exact URL.
+    rotation_hint = ""
+    if last_tweeted_team:
+        others = [t for t in ("eagles", "sixers", "phillies", "flyers") if t != last_tweeted_team]
+        rotation_hint = f"\nLast tweet was {last_tweeted_team}. Prefer picking from {', '.join(others)} this time.\n\n"
+
+    user = """{rotation_hint}Use ONLY the following articles. Pick one and use its exact URL.
 
 {articles_block}
 
-Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and phillysportdaily.com. Respond with tweet_text (full tweet, under 280 chars), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
+Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and phillysportdaily.com. Keep it SHORT (under 250 chars total) so phillysportdaily.com is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
@@ -277,7 +362,11 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
     llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.7)
     structured_llm = llm.with_structured_output(TweetOutput)
     chain = prompt | structured_llm
-    out = chain.invoke({"articles_block": articles_block, "voice_block": voice_block})
+    out = chain.invoke({
+        "articles_block": articles_block,
+        "voice_block": voice_block,
+        "rotation_hint": rotation_hint,
+    })
 
     if out.article_url not in allowed_urls:
         out.article_url = allowed_urls[0] if allowed_urls else ""
@@ -288,18 +377,149 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
     return out
 
 
+class StandaloneTweetOutput(BaseModel):
+    tweet_text: str = Field(
+        description="The tweet text, max 250 characters. Must include phillysportdaily.com. No article link."
+    )
+
+
+def generate_standalone_tweet(trending_context: str, openai_api_key: str) -> StandaloneTweetOutput | None:
+    """Generate a standalone tweet (no article) from trending/context. Uses Tavily for context."""
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_openai import ChatOpenAI
+
+    voice_block = _get_voice_prompt_block()
+    system = f"""{voice_block}
+
+Rules for this tweet:
+- tweet_text MUST be at most 250 characters total (including phillysportdaily.com).
+- tweet_text MUST include "phillysportdaily.com".
+- NO article link. This is a standalone take on trending Philly sports news.
+- Lead with YOUR reaction, joke, hot take, or question about what's happening.
+- Use hashtags when it fits (#Eagles #sixers #phillies #flyers #TTP #FlyEaglesFly)."""
+
+    user = """Use this trending/context to write a standalone tweet (no article link):
+
+{trending_context}
+
+Write a tweet that comments on what's trending in Philly sports. Include phillysportdaily.com. Keep under 250 chars."""
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system),
+        ("human", user),
+    ])
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.8)
+    structured_llm = llm.with_structured_output(StandaloneTweetOutput)
+    chain = prompt | structured_llm
+    return chain.invoke({"trending_context": trending_context})
+
+
+def search_trending_philly_sports() -> str:
+    """Search Tavily for trending Philly sports news. Returns context string for LLM."""
+    api_key = os.environ.get("TAVILY_API_KEY")
+    if not api_key:
+        return "Philadelphia Eagles, 76ers, Phillies, Flyers - general Philly sports news."
+
+    try:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=api_key)
+        resp = client.search(
+            "Philadelphia Eagles 76ers Phillies Flyers trending news today",
+            topic="news",
+            search_depth="basic",
+            max_results=5,
+        )
+        results = resp.get("results") or []
+        if not results:
+            return "Philadelphia Eagles, 76ers, Phillies, Flyers - general Philly sports news."
+
+        lines = []
+        for r in results[:5]:
+            title = (r.get("title") or "").strip()
+            content = (r.get("content") or "")[:300].strip()
+            if title or content:
+                lines.append(f"- {title}: {content}")
+        return "\n".join(lines) if lines else "Philadelphia Eagles, 76ers, Phillies, Flyers - general Philly sports news."
+    except Exception as e:
+        print(f"Warning: Tavily search failed ({e}), using fallback context", file=sys.stderr)
+        return "Philadelphia Eagles, 76ers, Phillies, Flyers - general Philly sports news."
+
+
+def generate_satire_image(headline: str, team: str, openai_api_key: str) -> str | None:
+    """Generate a satire image via DALL·E 3. Returns path to saved PNG or None."""
+    try:
+        from twitter_bot.config.image_prompts import build_satire_prompt
+    except ImportError:
+        def build_satire_prompt(h, t):
+            return f"Satirical oil painting of Philly sports fan, {t or 'Philadelphia'}, dramatic lighting. {h[:80]}"
+
+    prompt = build_satire_prompt(headline, team)
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=openai_api_key)
+        resp = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt[:1000],
+            size="1024x1024",
+            quality="standard",
+            n=1,
+            response_format="url",
+        )
+        url = resp.data[0].url if resp.data else None
+        if not url:
+            return None
+
+        import tempfile
+        import urllib.request
+        fd, path = tempfile.mkstemp(suffix=".png")
+        try:
+            with urllib.request.urlopen(url) as r:
+                with os.fdopen(fd, "wb") as f:
+                    f.write(r.read())
+            return path
+        except Exception:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+            if os.path.isfile(path):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            return None
+    except Exception as e:
+        print(f"Warning: DALL·E image generation failed: {e}", file=sys.stderr)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Post to X
 # ---------------------------------------------------------------------------
 # Uses official X SDK (xdk) first — api.x.com per docs.x.com. Falls back to
 # Tweepy (api.twitter.com) if xdk fails. Both use OAuth 1.0a, same credentials.
 
-def _post_via_xdk(text: str, api_key: str, api_secret: str, access: str, access_secret: str) -> tuple[bool, str | None]:
+def _upload_media(media_path: str, api_key: str, api_secret: str, access: str, access_secret: str) -> str | None:
+    """Upload media via Tweepy v1.1 API. Returns media_id or None."""
+    import tweepy
+    auth = tweepy.OAuth1UserHandler(
+        api_key, api_secret, access, access_secret
+    )
+    api = tweepy.API(auth)
+    try:
+        media = api.media_upload(media_path)
+        return str(media.media_id) if media and media.media_id else None
+    except Exception as e:
+        print(f"Warning: media upload failed: {e}", file=sys.stderr)
+        return None
+
+
+def _post_via_xdk(text: str, api_key: str, api_secret: str, access: str, access_secret: str, media_ids: list[str] | None = None) -> tuple[bool, str | None]:
     """Post via official X SDK (api.x.com). Returns (success, error_hint)."""
     try:
         from xdk import Client
         from xdk.oauth1_auth import OAuth1
-        from xdk.posts.models import CreateRequest
+        from xdk.posts.models import CreateRequest, CreateRequestMedia
 
         oauth1 = OAuth1(
             api_key=api_key,
@@ -309,7 +529,8 @@ def _post_via_xdk(text: str, api_key: str, api_secret: str, access: str, access_
             access_token_secret=access_secret,
         )
         client = Client(auth=oauth1)
-        resp = client.posts.create(CreateRequest(text=text))
+        media = CreateRequestMedia(media_ids=media_ids) if media_ids else None
+        resp = client.posts.create(CreateRequest(text=text, media=media))
         data = resp.get("data") if isinstance(resp, dict) else getattr(resp, "data", None)
         if data:
             tid = data.get("id") if isinstance(data, dict) else getattr(data, "id", None)
@@ -323,7 +544,7 @@ def _post_via_xdk(text: str, api_key: str, api_secret: str, access: str, access_
         return False, hint or str(e)
 
 
-def _post_via_tweepy(text: str, api_key: str, api_secret: str, access: str, access_secret: str) -> tuple[bool, str | None]:
+def _post_via_tweepy(text: str, api_key: str, api_secret: str, access: str, access_secret: str, media_ids: list[str] | None = None) -> tuple[bool, str | None]:
     """Post via Tweepy (api.twitter.com). Returns (success, error_hint)."""
     import tweepy
 
@@ -334,7 +555,10 @@ def _post_via_tweepy(text: str, api_key: str, api_secret: str, access: str, acce
         access_token_secret=access_secret,
     )
     try:
-        resp = client.create_tweet(text=text)
+        kwargs = {"text": text}
+        if media_ids:
+            kwargs["media_ids"] = [int(m) if str(m).isdigit() else m for m in media_ids]
+        resp = client.create_tweet(**kwargs)
         print(f"Posted tweet id: {resp.data['id']} (via tweepy/api.twitter.com)")
         return True, None
     except Exception as e:
@@ -343,7 +567,7 @@ def _post_via_tweepy(text: str, api_key: str, api_secret: str, access: str, acce
         return False, hint or str(e)
 
 
-def post_tweet(text: str) -> tuple[bool, str | None]:
+def post_tweet(text: str, media_path: str | None = None) -> tuple[bool, str | None]:
     """Returns (success, error_hint). Tries xdk (api.x.com) then tweepy (api.twitter.com) with retries."""
     import time
 
@@ -359,12 +583,18 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
     if len(text) > 280:
         text = text[:277] + "..."
 
+    media_ids = None
+    if media_path and os.path.isfile(media_path):
+        media_id = _upload_media(media_path, api_key, api_secret, access, access_secret)
+        if media_id:
+            media_ids = [media_id]
+
     max_attempts = 6
     base_wait = 5
     last_err = None
     backends = [
-        ("xdk (api.x.com)", lambda: _post_via_xdk(text, api_key, api_secret, access, access_secret)),
-        ("tweepy (api.twitter.com)", lambda: _post_via_tweepy(text, api_key, api_secret, access, access_secret)),
+        ("xdk (api.x.com)", lambda: _post_via_xdk(text, api_key, api_secret, access, access_secret, media_ids)),
+        ("tweepy (api.twitter.com)", lambda: _post_via_tweepy(text, api_key, api_secret, access, access_secret, media_ids)),
     ]
 
     is_retryable = True
@@ -388,6 +618,26 @@ def post_tweet(text: str) -> tuple[bool, str | None]:
     return False, hint
 
 
+def _ensure_suffix(tweet: str) -> str:
+    """Ensure tweet has phillysportdaily.com and is ≤280 chars."""
+    suffix = _PHILLYSPORTDAILY_SUFFIX
+    if "phillysportdaily.com" not in tweet:
+        tweet = tweet.rstrip()
+        if len(tweet) + len(suffix) <= 280:
+            tweet += suffix
+        else:
+            tweet = tweet[: 280 - len(suffix)].rstrip() + suffix
+    if len(tweet) > 280:
+        if "phillysportdaily.com" in tweet:
+            idx = tweet.find("phillysportdaily.com")
+            suffix_part = tweet[idx:]
+            max_prefix = 280 - len(suffix_part)
+            tweet = tweet[:max_prefix].rstrip() + " " + suffix_part
+        else:
+            tweet = tweet[:280]
+    return tweet
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -398,6 +648,32 @@ def main():
         print("Set OPENAI_API_KEY in .env_x (repo root)", file=sys.stderr)
         sys.exit(1)
 
+    content_type = choose_content_type()
+    print(f"Content type: {content_type}")
+
+    # ---- STANDALONE: trending, no article ----
+    if content_type == "standalone":
+        print("Searching trending Philly sports (Tavily)...")
+        trending = search_trending_philly_sports()
+        print("Generating standalone tweet...")
+        out = generate_standalone_tweet(trending, openai_key)
+        if not out:
+            print("Standalone tweet generation failed.", file=sys.stderr)
+            sys.exit(1)
+        tweet = _ensure_suffix(out.tweet_text.strip())
+        print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
+        success, hint = post_tweet(tweet)
+        if success:
+            _save_last_content_type("standalone")
+            print("Done.")
+        else:
+            if hint in ("503", "429"):
+                print("X API unavailable (503/429). Will retry next scheduled run.", file=sys.stderr)
+                sys.exit(0)
+            sys.exit(1)
+        return
+
+    # ---- ARTICLE or SATIRE_IMAGE: need articles ----
     print("Fetching articles...")
     articles = _build_all_articles()
     if not articles:
@@ -413,27 +689,53 @@ def main():
     if len(candidates) < len(articles):
         print(f"Excluding {len(articles) - len(candidates)} already-tweeted articles; {len(candidates)} candidates.")
 
+    last_team = _load_last_tweeted_team()
+    if last_team:
+        def _rotation_key(a):
+            t = (a.get("team") or "").strip().lower()
+            return (0 if t != last_team else 1, a.get("url", ""))
+        candidates = sorted(candidates, key=_rotation_key)
+        print(f"Sports rotation: last was {last_team}, preferring others.")
+
     print("Generating tweet (LangChain + your voice)...")
-    out = generate_tweet(candidates, openai_key)
+    out = generate_tweet(candidates, openai_key, last_tweeted_team=last_team)
     if not out:
         print("Tweet generation failed.", file=sys.stderr)
         sys.exit(1)
 
-    tweet = out.tweet_text.strip()
-    if "phillysportdaily.com" not in tweet:
-        tweet = tweet.rstrip()
-        if len(tweet) + 24 <= 280:
-            tweet += " phillysportdaily.com"
-        else:
-            tweet = tweet[:255].rstrip() + " phillysportdaily.com"
+    tweet = _ensure_suffix(out.tweet_text.strip())
+    media_path = None
+
+    if content_type == "satire_image":
+        article = next((a for a in candidates if (a.get("url") or "").strip() == (out.article_url or "").strip()), None)
+        if article:
+            print("Generating satire image (DALL·E 3)...")
+            media_path = generate_satire_image(
+                article.get("title", ""),
+                article.get("team", ""),
+                openai_key,
+            )
+            if not media_path:
+                print("Satire image failed, posting text-only.", file=sys.stderr)
 
     print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
     print(f"Article URL: {out.article_url}")
     print(f"Headline: {out.headline_used[:60]}...")
 
-    success, hint = post_tweet(tweet)
+    success, hint = post_tweet(tweet, media_path=media_path)
+    if media_path and os.path.isfile(media_path):
+        try:
+            os.remove(media_path)
+        except OSError:
+            pass
+
     if success:
         _append_tweeted_url(out.article_url)
+        for a in candidates:
+            if (a.get("url") or "").strip() == (out.article_url or "").strip():
+                _save_last_tweeted_team(a.get("team"))
+                break
+        _save_last_content_type(content_type)
         print("Done.")
     else:
         if hint in ("503", "429"):

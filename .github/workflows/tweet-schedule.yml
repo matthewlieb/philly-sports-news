@@ -30,11 +30,12 @@ jobs:
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
         run: python -m twitter_bot.run
 
-      - name: Commit tweeted_urls if changed
+      - name: Commit tweeted_urls, last_tweeted_team, last_content_type if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add twitter_bot/data/tweeted_urls.txt 2>/dev/null || true
-          git diff --staged --quiet || (git commit -m "chore(bot): update tweeted_urls after scheduled run" && git push)
+          git add twitter_bot/data/tweeted_urls.txt twitter_bot/data/last_tweeted_team.txt twitter_bot/data/last_content_type.txt 2>/dev/null || true
+          git diff --staged --quiet || (git commit -m "chore(bot): update tweeted_urls, last_tweeted_team, last_content_type after scheduled run" && git push)

@@ -81,6 +81,8 @@ docs/_build/
 flask_output.log
 /tmp/flask_output.log
 
-# Twitter bot: ignore data dir except tweeted_urls (workflow commits that file)
+# Twitter bot: ignore data dir except tweeted_urls, last_tweeted_team, last_content_type (workflow commits these)
 twitter_bot/data/
 !twitter_bot/data/tweeted_urls.txt
+!twitter_bot/data/last_tweeted_team.txt
+!twitter_bot/data/last_content_type.txt
