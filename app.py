@@ -21,6 +21,7 @@ if _os.path.isfile(_env_path):
                         _os.environ["API_KEY"] = _v
 
 import random
+from datetime import date
 from typing import List, Tuple
 from jinja2 import Template
 from lib.rate_limiter import *
@@ -107,6 +108,82 @@ def merge_articles_from_sources(article_sources: List[dict]) -> Tuple[List[str],
             filtered_authors.append(author if author else '-- Unknown')
     
     return filtered_titles, filtered_urls, filtered_images, filtered_blurbs, filtered_authors
+
+
+def get_daily_summary():
+    """
+    One AI-generated summary per calendar day for Philly sports headlines.
+    Cached 24h by date. Returns None if OPENAI_API_KEY missing or API fails.
+    """
+    from openai import OpenAI
+
+    cache_key = f"daily_summary_{date.today().isoformat()}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    api_key = _os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+
+    all_articles = []
+    for team in ("eagles", "sixers", "phillies", "flyers"):
+        try:
+            sources = collect_articles_for_team(team)
+            for src in sources:
+                titles = src.get("titles", [])
+                urls = src.get("urls", [])
+                images = src.get("images", []) or [None] * len(titles)
+                blurbs = src.get("blurbs", [])
+                authors = src.get("authors", []) or ["Unknown"] * len(titles)
+                n = max(len(titles), len(urls), len(blurbs), len(authors), len(images))
+                for i in range(n):
+                    url = urls[i] if i < len(urls) else ""
+                    if not url or not url.startswith("http"):
+                        continue
+                    all_articles.append({
+                        "title": (titles[i] if i < len(titles) else "").strip(),
+                        "url": url,
+                        "image": images[i] if i < len(images) else None,
+                        "description": (blurbs[i] if i < len(blurbs) else "").strip(),
+                        "author": authors[i] if i < len(authors) else "Unknown",
+                        "source": get_source_name_from_url(url),
+                        "team": team,
+                    })
+        except Exception:
+            continue
+
+    if not all_articles:
+        return None
+
+    ranked = merge_and_rank_articles(all_articles, max_articles=25)
+    headlines_text = "\n".join(f"- {a.get('title', '')}" for a in ranked[:20] if a.get("title"))
+
+    try:
+        client = OpenAI(api_key=api_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You write a very short 2–3 sentence summary of the day's Philly sports news. Tone: casual fan, no fluff. Mention Eagles, Sixers, Phillies, and/or Flyers only when the headlines support it. No generic intros like 'Here's what's happening.'",
+                },
+                {
+                    "role": "user",
+                    "content": f"Based on these headlines, write a 2–3 sentence summary of today's Philly sports news.\n\n{headlines_text}",
+                },
+            ],
+            max_tokens=150,
+            temperature=0.5,
+        )
+        summary = (resp.choices[0].message.content or "").strip()
+        if not summary:
+            return None
+        cache.set(cache_key, summary, timeout=86400 * 2)  # 2 days
+        return summary
+    except Exception:
+        return None
+
 
 @app.route('/health')
 def health():
@@ -195,6 +272,8 @@ def home():
     video_id = eagles_request()
     embed_code = create_safe_embed_code(video_id, 'Philadelphia Eagles')
 
+    daily_summary = get_daily_summary()
+
     # Read the contents of the template file into a string
     with open('templates/index.html', 'r') as f:
         template_str = f.read()
@@ -203,7 +282,7 @@ def home():
     template = Template(template_str)
 
     # Render the template with the filtered headlines and URLs
-    html = template.render(zip=zip, column1=filtered_titles1, column2=filtered_titles2, column3=filtered_titles3, column4=filtered_titles4, column5=filtered_titles5, urls1=filtered_urls1, urls2=filtered_urls2, urls3=filtered_urls3, urls4=filtered_urls4, urls5=filtered_urls5, imageURLS1=filtered_images1, imageURLS2=filtered_images2, imageURLS3=filtered_images3, imageURLS4=filtered_images4, imageURLS5=filtered_images5, keys=keys, values=values, embed_code=embed_code, blurbs1=filtered_blurbs1, blurbs2=filtered_blurbs2, blurbs3=filtered_blurbs3, blurbs4=filtered_blurbs4, blurbs5=filtered_blurbs5, authors1=filtered_authors1, authors2=filtered_authors2, authors3=filtered_authors3, authors4=filtered_authors4, authors5=filtered_authors5)
+    html = template.render(zip=zip, column1=filtered_titles1, column2=filtered_titles2, column3=filtered_titles3, column4=filtered_titles4, column5=filtered_titles5, urls1=filtered_urls1, urls2=filtered_urls2, urls3=filtered_urls3, urls4=filtered_urls4, urls5=filtered_urls5, imageURLS1=filtered_images1, imageURLS2=filtered_images2, imageURLS3=filtered_images3, imageURLS4=filtered_images4, imageURLS5=filtered_images5, keys=keys, values=values, embed_code=embed_code, blurbs1=filtered_blurbs1, blurbs2=filtered_blurbs2, blurbs3=filtered_blurbs3, blurbs4=filtered_blurbs4, blurbs5=filtered_blurbs5, authors1=filtered_authors1, authors2=filtered_authors2, authors3=filtered_authors3, authors4=filtered_authors4, authors5=filtered_authors5, daily_summary=daily_summary)
 
     return html
 
@@ -292,9 +371,11 @@ def sixers():
     # Create a Template object from the template string
     template = Template(template_str)
 
+    daily_summary = get_daily_summary()
+
     # Render the template with the filtered headlines and URLs
     # Note: Source names are now dynamic based on article URLs
-    html2 = template.render(zip1=zip, column1a=filtered_titles1a, column2a=filtered_titles2a, column3a=filtered_titles3a, column4a=filtered_titles4a, column5a=filtered_titles5a, urls1a=filtered_urls1a, urls2a=filtered_urls2a, urls3a=filtered_urls3a, urls4a=filtered_urls4a, urls5a=filtered_urls5a, imageURLS1a=filtered_images1a, imageURLS2a=filtered_images2a, imageURLS3a=filtered_images3a, imageURLS4a=filtered_images4a, imageURLS5a=filtered_images5a, keys1=keys1, values1=values1, embed_code1=embed_code1, blurbs1a=filtered_blurbs1a, blurbs2a=filtered_blurbs2a, blurbs3a=filtered_blurbs3a, blurbs4a=filtered_blurbs4a, blurbs5a=filtered_blurbs5a, authors1a=filtered_authors1a, authors2a=filtered_authors2a, authors3a=filtered_authors3a, authors4a=filtered_authors4a, authors5a=filtered_authors5a)
+    html2 = template.render(zip1=zip, column1a=filtered_titles1a, column2a=filtered_titles2a, column3a=filtered_titles3a, column4a=filtered_titles4a, column5a=filtered_titles5a, urls1a=filtered_urls1a, urls2a=filtered_urls2a, urls3a=filtered_urls3a, urls4a=filtered_urls4a, urls5a=filtered_urls5a, imageURLS1a=filtered_images1a, imageURLS2a=filtered_images2a, imageURLS3a=filtered_images3a, imageURLS4a=filtered_images4a, imageURLS5a=filtered_images5a, keys1=keys1, values1=values1, embed_code1=embed_code1, blurbs1a=filtered_blurbs1a, blurbs2a=filtered_blurbs2a, blurbs3a=filtered_blurbs3a, blurbs4a=filtered_blurbs4a, blurbs5a=filtered_blurbs5a, authors1a=filtered_authors1a, authors2a=filtered_authors2a, authors3a=filtered_authors3a, authors4a=filtered_authors4a, authors5a=filtered_authors5a, daily_summary=daily_summary)
 
     return html2
 
@@ -381,8 +462,10 @@ def phillies():
     # Create a Template object from the template string
     template = Template(template_str)
 
+    daily_summary = get_daily_summary()
+
     # Render the template with the headlines and URLs
-    html3 = template.render(zip2=zip, column1b=filtered_titles1b, column2b=filtered_titles2b, column3b=filtered_titles3b, column4b=filtered_titles4b, column5b=filtered_titles5b, urls1b=filtered_urls1b, urls2b=filtered_urls2b, urls3b=filtered_urls3b, urls4b=filtered_urls4b, urls5b=filtered_urls5b, imageURLS1b=filtered_images1b,imageURLS2b=filtered_images2b, imageURLS3b=filtered_images3b, imageURLS4b=filtered_images4b, imageURLS5b=filtered_images5b, keys2=keys2, values2=values2, embed_code2=embed_code2, blurbs1b=filtered_blurbs1b, blurbs2b=filtered_blurbs2b, blurbs3b=filtered_blurbs3b, blurbs4b=filtered_blurbs4b, blurbs5b=filtered_blurbs5b, authors1b=filtered_authors1b, authors2b=filtered_authors2b, authors3b=filtered_authors3b, authors4b=filtered_authors4b, authors5b=filtered_authors5b)
+    html3 = template.render(zip2=zip, column1b=filtered_titles1b, column2b=filtered_titles2b, column3b=filtered_titles3b, column4b=filtered_titles4b, column5b=filtered_titles5b, urls1b=filtered_urls1b, urls2b=filtered_urls2b, urls3b=filtered_urls3b, urls4b=filtered_urls4b, urls5b=filtered_urls5b, imageURLS1b=filtered_images1b,imageURLS2b=filtered_images2b, imageURLS3b=filtered_images3b, imageURLS4b=filtered_images4b, imageURLS5b=filtered_images5b, keys2=keys2, values2=values2, embed_code2=embed_code2, blurbs1b=filtered_blurbs1b, blurbs2b=filtered_blurbs2b, blurbs3b=filtered_blurbs3b, blurbs4b=filtered_blurbs4b, blurbs5b=filtered_blurbs5b, authors1b=filtered_authors1b, authors2b=filtered_authors2b, authors3b=filtered_authors3b, authors4b=filtered_authors4b, authors5b=filtered_authors5b, daily_summary=daily_summary)
 
     return html3
 
@@ -469,8 +552,10 @@ def flyers():
     # Create a Template object from the template string
     template = Template(template_str)
 
+    daily_summary = get_daily_summary()
+
     # Render the template with the headlines and URLs
-    html4 = template.render(zip3=zip, column1c=filtered_titles1c, column2c=filtered_titles2c, column3c=filtered_titles3c, column4c=filtered_titles4c, column5c=filtered_titles5c, urls1c=filtered_urls1c, urls2c=filtered_urls2c, urls3c=filtered_urls3c, urls4c=filtered_urls4c, urls5c=filtered_urls5c, imageURLS1c=filtered_images1c,imageURLS2c=filtered_images2c, imageURLS3c=filtered_images3c, imageURLS4c=filtered_images4c, imageURLS5c=filtered_images5c, keys3=keys3, values3=values3, embed_code3=embed_code3, blurbs1c=filtered_blurbs1c, blurbs2c=filtered_blurbs2c, blurbs3c=filtered_blurbs3c, blurbs4c=filtered_blurbs4c, blurbs5c=filtered_blurbs5c, authors1c=filtered_authors1c, authors2c=filtered_authors2c, authors3c=filtered_authors3c, authors4c=filtered_authors4c, authors5c=filtered_authors5c)
+    html4 = template.render(zip3=zip, column1c=filtered_titles1c, column2c=filtered_titles2c, column3c=filtered_titles3c, column4c=filtered_titles4c, column5c=filtered_titles5c, urls1c=filtered_urls1c, urls2c=filtered_urls2c, urls3c=filtered_urls3c, urls4c=filtered_urls4c, urls5c=filtered_urls5c, imageURLS1c=filtered_images1c,imageURLS2c=filtered_images2c, imageURLS3c=filtered_images3c, imageURLS4c=filtered_images4c, imageURLS5c=filtered_images5c, keys3=keys3, values3=values3, embed_code3=embed_code3, blurbs1c=filtered_blurbs1c, blurbs2c=filtered_blurbs2c, blurbs3c=filtered_blurbs3c, blurbs4c=filtered_blurbs4c, blurbs5c=filtered_blurbs5c, authors1c=filtered_authors1c, authors2c=filtered_authors2c, authors3c=filtered_authors3c, authors4c=filtered_authors4c, authors5c=filtered_authors5c, daily_summary=daily_summary)
 
     return html4
 
