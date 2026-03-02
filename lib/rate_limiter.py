@@ -1,5 +1,6 @@
 import time
 import random
+from datetime import datetime, timedelta, timezone
 
 from lib import config
 from lib.youtube_utils import validate_youtube_video
@@ -36,6 +37,10 @@ flyers_video_id = None
 flyers_video_ids = None
 flyers_response = None
 
+def _published_after_days(days=30):
+    """RFC 3339 timestamp for videos published in the last N days."""
+    return (datetime.now(timezone.utc) - timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%SZ')
+
 def eagles_request():
     global eagles_response, eagles_video_ids, eagles_last_request_time, eagles_video_id
     current_time = time.time()
@@ -44,11 +49,12 @@ def eagles_request():
             request = youtube.search().list(
                 part="id,snippet",
                 type='video',
-                q='Philadelphia Eagles highlights news analysis 2024 2025 -NFL -"NFL Network" -"NFL.com"',
+                q='Philadelphia Eagles NFL highlights news analysis -music -"Eagles band"',
+                videoCategoryId='17',  # Sports only - excludes music videos
                 videoDefinition='high',
                 videoEmbeddable='true',
-                order='relevance',
-                publishedAfter='2024-01-01T00:00:00Z',
+                order='date',
+                publishedAfter=_published_after_days(30),
                 maxResults=20,
                 fields="items(id(videoId),snippet(title,channelTitle,publishedAt))"
             )
@@ -87,11 +93,12 @@ def sixers_request():
             request = youtube.search().list(
                 part="id,snippet",
                 type='video',
-                q='Philadelphia 76ers highlights news analysis 2024 2025 NBA',
+                q='Philadelphia 76ers NBA highlights news analysis',
+                videoCategoryId='17',  # Sports only
                 videoDefinition='high',
                 videoEmbeddable='true',
-                order='relevance',
-                publishedAfter='2024-01-01T00:00:00Z',
+                order='date',
+                publishedAfter=_published_after_days(30),
                 maxResults=20,
                 fields="items(id(videoId),snippet(title,channelTitle,publishedAt))"
             )
@@ -129,11 +136,12 @@ def phillies_request():
             request = youtube.search().list(
                 part="id,snippet",
                 type='video',
-                q='Philadelphia Phillies highlights news analysis 2024 2025 MLB',
+                q='Philadelphia Phillies MLB highlights news analysis',
+                videoCategoryId='17',  # Sports only
                 videoDefinition='high',
                 videoEmbeddable='true',
-                order='relevance',
-                publishedAfter='2024-01-01T00:00:00Z',
+                order='date',
+                publishedAfter=_published_after_days(30),
                 maxResults=20,
                 fields="items(id(videoId),snippet(title,channelTitle,publishedAt))"
             )
@@ -172,11 +180,12 @@ def flyers_request():
             request = youtube.search().list(
                 part="id,snippet",
                 type='video',
-                q='Philadelphia Flyers highlights news analysis 2024 2025 NHL',
+                q='Philadelphia Flyers NHL highlights news analysis',
+                videoCategoryId='17',  # Sports only
                 videoDefinition='high',
                 videoEmbeddable='true',
-                order='relevance',
-                publishedAfter='2024-01-01T00:00:00Z',
+                order='date',
+                publishedAfter=_published_after_days(30),
                 maxResults=20,
                 fields="items(id(videoId),snippet(title,channelTitle,publishedAt))"
             )

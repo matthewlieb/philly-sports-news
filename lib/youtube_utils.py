@@ -4,6 +4,7 @@ Utility functions for YouTube video handling
 
 import requests
 import time
+from datetime import datetime, timedelta, timezone
 
 def validate_youtube_video(video_id, api_key):
     """
@@ -77,25 +78,28 @@ def get_embeddable_video_id(team, api_key, max_attempts=20):
         
         youtube = build('youtube', 'v3', developerKey=api_key)
         
-        # Define search terms for each team - exclude official channels that block embeds
+        # Define search terms for each team - no static years, dates handled by publishedAfter
+        # videoCategoryId=17 (Sports) filters out music videos, etc.
         search_terms = {
-            'eagles': 'Philadelphia Eagles highlights 2024 2025 -NFL -"NFL Network" -"NFL.com"',
-            'sixers': 'Philadelphia 76ers highlights 2024 2025 -NBA -"NBA TV" -"NBA.com"', 
-            'phillies': 'Philadelphia Phillies highlights 2024 2025 -MLB -"MLB Network" -"MLB.com"',
-            'flyers': 'Philadelphia Flyers highlights 2024 2025 -NHL -"NHL Network" -"NHL.com"'
+            'eagles': 'Philadelphia Eagles NFL highlights news analysis -music -"Eagles band"',
+            'sixers': 'Philadelphia 76ers NBA highlights news analysis',
+            'phillies': 'Philadelphia Phillies MLB highlights news analysis',
+            'flyers': 'Philadelphia Flyers NHL highlights news analysis'
         }
         
         search_term = search_terms.get(team.lower(), 'Philadelphia sports highlights')
+        published_after = (datetime.now(timezone.utc) - timedelta(days=30)).strftime('%Y-%m-%dT%H:%M:%SZ')
         
-        # Search for videos, excluding official channels
+        # Search for videos - order=date for recent results
         request = youtube.search().list(
             part="id,snippet",
             type='video',
             q=search_term,
+            videoCategoryId='17',  # Sports only
             videoDefinition='high',
             videoEmbeddable='true',
-            order='relevance',
-            publishedAfter='2024-01-01T00:00:00Z',
+            order='date',
+            publishedAfter=published_after,
             maxResults=max_attempts,
             fields="items(id(videoId),snippet(title,channelTitle,publishedAt))"
         )
