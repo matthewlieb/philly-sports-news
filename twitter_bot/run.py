@@ -98,7 +98,11 @@ def _build_all_articles():
 _TWEETED_URLS_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "tweeted_urls.txt")
 _LAST_TWEETED_TEAM_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "last_tweeted_team.txt")
 _LAST_CONTENT_TYPE_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "last_content_type.txt")
+_LAST_TWEET_PREVIEW_FILE = os.path.join(_REPO_ROOT, "twitter_bot", "data", "last_tweet_preview.json")
 _MAX_TWEETED_URLS = 500
+_MAX_PREVIEW_HEADLINES = 3
+# Keep total tweet ≤240 so "phillysportdaily.com" is never truncated in UI
+_MAX_TWEET_CHARS = 240
 _PHILLYSPORTDAILY_SUFFIX = " phillysportdaily.com"  # 22 chars
 
 # Content types: article (link), satire_image (article + generated image), standalone (trending, no article)
@@ -260,6 +264,43 @@ def _save_last_content_type(content_type: str) -> None:
         print(f"Warning: could not save last content type: {e}", file=sys.stderr)
 
 
+def _load_last_tweet_preview() -> tuple[str | None, list[str]]:
+    """Load last tweet opening (first ~35 chars) and last N headlines to avoid same story / same opening."""
+    opening: str | None = None
+    headlines: list[str] = []
+    if not os.path.isfile(_LAST_TWEET_PREVIEW_FILE):
+        return opening, headlines
+    try:
+        import json
+        with open(_LAST_TWEET_PREVIEW_FILE) as f:
+            data = json.load(f)
+        opening = (data.get("opening") or "").strip()[:35] or None
+        headlines = list(data.get("headlines") or [])[:_MAX_PREVIEW_HEADLINES]
+    except (OSError, ValueError):
+        pass
+    return opening, headlines
+
+
+def _save_last_tweet_preview(tweet_text: str, headline: str) -> None:
+    """Save last tweet opening and headline so next run can avoid same story / repeated opening."""
+    opening = (tweet_text or "").strip()[:35]
+    if not opening:
+        return
+    try:
+        import json
+        os.makedirs(os.path.dirname(_LAST_TWEET_PREVIEW_FILE), exist_ok=True)
+        prev_opening, prev_headlines = _load_last_tweet_preview()
+        new_headlines = [headline.strip() for headline in [headline] if headline.strip()]
+        for h in prev_headlines:
+            if h and h != (headline or "").strip() and h not in new_headlines:
+                new_headlines.append(h)
+        data = {"opening": opening, "headlines": new_headlines[:_MAX_PREVIEW_HEADLINES]}
+        with open(_LAST_TWEET_PREVIEW_FILE, "w") as f:
+            json.dump(data, f, indent=0)
+    except OSError as e:
+        print(f"Warning: could not save last tweet preview: {e}", file=sys.stderr)
+
+
 def choose_content_type() -> str:
     """Pick content type with weighted random, down-weighting last type to avoid streaks."""
     import random
@@ -303,7 +344,7 @@ def _get_voice_prompt_block():
 
 class TweetOutput(BaseModel):
     tweet_text: str = Field(
-        description="The tweet text, max 250 characters. Must include the exact article_url below and phillysportdaily.com. Be concise."
+        description="The tweet text, max 240 characters. Must include the exact article_url and end with phillysportdaily.com. Be concise."
     )
     article_url: str = Field(
         description="One of the exact article URLs from the list above. Copy it character-for-character."
@@ -313,7 +354,13 @@ class TweetOutput(BaseModel):
     )
 
 
-def generate_tweet(articles: list[dict], openai_api_key: str, last_tweeted_team: str | None = None) -> TweetOutput | None:
+def generate_tweet(
+    articles: list[dict],
+    openai_api_key: str,
+    last_tweeted_team: str | None = None,
+    avoid_opening: str | None = None,
+    recent_headlines: list[str] | None = None,
+) -> TweetOutput | None:
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
 
@@ -334,15 +381,25 @@ def generate_tweet(articles: list[dict], openai_api_key: str, last_tweeted_team:
     allowed_urls = [a.get("url", "").strip() for a in articles if a.get("url")]
     voice_block = _get_voice_prompt_block()
 
+    variety_rules = []
+    if avoid_opening:
+        variety_rules.append(f"- Do NOT start this tweet with the same opening as last time. Last tweet started with: \"{avoid_opening[:35]}...\". Use a different lead-in: BREAKING, a stat, a question, \"This is wild.\", \"Wild.\", etc. Avoid starting with \"So...\" if you used that recently.")
+    else:
+        variety_rules.append("- Vary your openings. Do not start multiple tweets in a row with \"So...\". Use BREAKING, a stat, a question, \"This is wild.\", \"Wild.\", or a hot take.")
+    if recent_headlines:
+        variety_rules.append(f"- Do NOT write about the same story as these recent tweets. Pick a different article/topic. Recent headlines we already tweeted: {', '.join(repr(h[:50]) for h in recent_headlines[:3])}.")
+    variety_rules_str = "\n".join(variety_rules)
+
     system = """{voice_block}
 
 Rules for this tweet:
-- tweet_text MUST be at most 250 characters total (including the article URL and phillysportdaily.com) to avoid truncation.
-- tweet_text MUST include the exact article_url you choose and "phillysportdaily.com".
+- tweet_text MUST be at most 240 characters total so the full tweet (including phillysportdaily.com) is visible and never truncated.
+- tweet_text MUST include the exact article_url you choose and MUST end with "phillysportdaily.com" (put the domain at the end).
 - article_url MUST be one of the exact URLs from the list below (copy character-for-character).
-- DO NOT just repeat or paraphrase the headline. The tweet must lead with YOUR reaction, take, joke, question, or angle (e.g. "BREAKING:", "This is wild.", "So we're doing this again?", a stat, or sarcasm)—then reference the story and include the link. If the tweet could be mistaken for a news headline, rewrite it to add your voice.
+- DO NOT just repeat or paraphrase the headline. Lead with YOUR reaction, take, joke, question, or angle—then reference the story and include the link.
+{variety_rules_str}
 - The list below contains only articles we have NOT tweeted yet; pick one of these.
-- Rotate coverage: prefer articles from Eagles, Sixers, Phillies, or Flyers we have NOT tweeted recently. Cover all four Philly sports over time."""
+- Balance teams: prefer Eagles, Sixers, Phillies, and Flyers in rotation. Do not tweet Eagles (or any one team) multiple times in a row. Prefer a different team than last time when possible."""
 
     rotation_hint = ""
     if last_tweeted_team:
@@ -353,7 +410,7 @@ Rules for this tweet:
 
 {articles_block}
 
-Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and phillysportdaily.com. Keep it SHORT (under 250 chars total) so phillysportdaily.com is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
+Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and end with phillysportdaily.com. Keep it under 240 characters total so phillysportdaily.com is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
@@ -365,6 +422,7 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
     out = chain.invoke({
         "articles_block": articles_block,
         "voice_block": voice_block,
+        "variety_rules_str": variety_rules_str,
         "rotation_hint": rotation_hint,
     })
 
@@ -379,7 +437,7 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
 
 class StandaloneTweetOutput(BaseModel):
     tweet_text: str = Field(
-        description="The tweet text, max 250 characters. Must include phillysportdaily.com. No article link."
+        description="The tweet text, max 240 characters. Must end with phillysportdaily.com. No article link."
     )
 
 
@@ -392,17 +450,16 @@ def generate_standalone_tweet(trending_context: str, openai_api_key: str) -> Sta
     system = f"""{voice_block}
 
 Rules for this tweet:
-- tweet_text MUST be at most 250 characters total (including phillysportdaily.com).
-- tweet_text MUST include "phillysportdaily.com".
-- NO article link. This is a standalone take on trending Philly sports news.
-- Lead with YOUR reaction, joke, hot take, or question about what's happening.
-- Use hashtags when it fits (#Eagles #sixers #phillies #flyers #TTP #FlyEaglesFly)."""
+- tweet_text MUST be at most 240 characters total. End with "phillysportdaily.com".
+- NO article link. This is a standalone tweet: can be a reaction to trending news, a stat, a historical moment, a hot take, or a question—not everything has to be article-based.
+- Lead with YOUR reaction, joke, stat, "On this day," hot take, or question. Vary openings; avoid starting with "So..." repeatedly.
+- Balance teams when relevant: Eagles, Sixers, Phillies, Flyers. Use hashtags when it fits (#Eagles #sixers #phillies #flyers #TTP #FlyEaglesFly)."""
 
     user = """Use this trending/context to write a standalone tweet (no article link):
 
 {trending_context}
 
-Write a tweet that comments on what's trending in Philly sports. Include phillysportdaily.com. Keep under 250 chars."""
+Write a tweet: reaction to news, a stat, a historical note, or a hot take about Philly sports. Include phillysportdaily.com at the end. Keep under 240 chars."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
@@ -619,22 +676,23 @@ def post_tweet(text: str, media_path: str | None = None) -> tuple[bool, str | No
 
 
 def _ensure_suffix(tweet: str) -> str:
-    """Ensure tweet has phillysportdaily.com and is ≤280 chars."""
+    """Ensure tweet has phillysportdaily.com and is ≤240 chars so the domain is never truncated in UI."""
     suffix = _PHILLYSPORTDAILY_SUFFIX
+    max_len = _MAX_TWEET_CHARS
     if "phillysportdaily.com" not in tweet:
         tweet = tweet.rstrip()
-        if len(tweet) + len(suffix) <= 280:
+        if len(tweet) + len(suffix) <= max_len:
             tweet += suffix
         else:
-            tweet = tweet[: 280 - len(suffix)].rstrip() + suffix
-    if len(tweet) > 280:
+            tweet = tweet[: max_len - len(suffix)].rstrip() + suffix
+    if len(tweet) > max_len:
         if "phillysportdaily.com" in tweet:
             idx = tweet.find("phillysportdaily.com")
             suffix_part = tweet[idx:]
-            max_prefix = 280 - len(suffix_part)
+            max_prefix = max_len - len(suffix_part)
             tweet = tweet[:max_prefix].rstrip() + " " + suffix_part
         else:
-            tweet = tweet[:280]
+            tweet = tweet[:max_len]
     return tweet
 
 
@@ -697,8 +755,18 @@ def main():
         candidates = sorted(candidates, key=_rotation_key)
         print(f"Sports rotation: last was {last_team}, preferring others.")
 
+    avoid_opening, recent_headlines = _load_last_tweet_preview()
+    if avoid_opening:
+        print(f"Avoiding same opening as last tweet: \"{avoid_opening}...\"")
+
     print("Generating tweet (LangChain + your voice)...")
-    out = generate_tweet(candidates, openai_key, last_tweeted_team=last_team)
+    out = generate_tweet(
+        candidates,
+        openai_key,
+        last_tweeted_team=last_team,
+        avoid_opening=avoid_opening,
+        recent_headlines=recent_headlines,
+    )
     if not out:
         print("Tweet generation failed.", file=sys.stderr)
         sys.exit(1)
@@ -731,6 +799,7 @@ def main():
 
     if success:
         _append_tweeted_url(out.article_url)
+        _save_last_tweet_preview(tweet, out.headline_used or "")
         for a in candidates:
             if (a.get("url") or "").strip() == (out.article_url or "").strip():
                 _save_last_tweeted_team(a.get("team"))

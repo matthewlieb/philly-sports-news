@@ -31,7 +31,7 @@ Each run picks one:
 - **satire_image** (~25%) – Same as article, plus a DALL·E 3–generated satire image
 - **standalone** (~20%) – No article link; comment on trending Philly sports (Tavily search)
 
-State is tracked in `data/last_content_type.txt` to avoid streaks.
+State is tracked in `data/last_content_type.txt` to avoid streaks. The bot also keeps `data/last_tweet_preview.json` (last opening + recent headlines) so it avoids back-to-back same-article tweets and repeated "So..." openings. Tweets are capped at 240 characters so `phillysportdaily.com` stays visible and isn’t truncated in the UI.
 
 ## Layout
 
@@ -41,6 +41,7 @@ State is tracked in `data/last_content_type.txt` to avoid streaks.
 - `data/tweeted_urls.txt` – URLs we already tweeted (no reuse); trimmed to last 500.
 - `data/last_tweeted_team.txt` – Last team tweeted (Eagles/Sixers/Phillies/Flyers rotation).
 - `data/last_content_type.txt` – Last content type (article/satire_image/standalone).
+- `data/last_tweet_preview.json` – Last tweet opening + recent headlines (avoids same-article and "So..." repetition).
 - `docs/` – bot-specific docs (e.g. satire-images.md).
 
 ## Scheduling
