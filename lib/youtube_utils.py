@@ -133,5 +133,5 @@ def create_safe_embed_code(video_id, team):
         # Return empty string - don't display anything
         return ''
     
-    # Return simple iframe embed - original format
-    return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+    # Return simple iframe embed with lazy loading for better LCP
+    return f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}?rel=0&modestbranding=1" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>'

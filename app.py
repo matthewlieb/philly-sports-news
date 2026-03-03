@@ -36,9 +36,14 @@ from lib.article_enhancer import enhance_article_data
 
 app = Flask(__name__)
 
-# Configure caching
-app.config['CACHE_TYPE'] = 'simple'  # Simple in-memory cache
-app.config['CACHE_DEFAULT_TIMEOUT'] = 3600  # 1 hour default timeout
+# Configure caching: Redis if REDIS_URL set (persists across restarts), else in-memory
+_redis_url = _os.environ.get("REDIS_URL")
+if _redis_url:
+    app.config["CACHE_TYPE"] = "redis"
+    app.config["CACHE_REDIS_URL"] = _redis_url
+else:
+    app.config["CACHE_TYPE"] = "simple"
+app.config["CACHE_DEFAULT_TIMEOUT"] = 3600  # 1 hour default timeout
 cache = Cache(app)
 
 def filter_articles_with_images(titles, urls, images, blurbs, authors=None):
@@ -110,6 +115,40 @@ def merge_articles_from_sources(article_sources: List[dict]) -> Tuple[List[str],
     return filtered_titles, filtered_urls, filtered_images, filtered_blurbs, filtered_authors
 
 
+def _get_tavily_philly_context(team):
+    """
+    Optional: fetch fresh Philly sports context from Tavily for the 60-second summary.
+    Returns a string of snippets (or empty) when TAVILY_API_KEY is set.
+    team: 'eagles' | 'sixers' | 'phillies' | 'flyers'
+    """
+    api_key = _os.environ.get("TAVILY_API_KEY")
+    if not api_key:
+        return ""
+    team_labels = {"eagles": "Eagles", "sixers": "76ers", "phillies": "Phillies", "flyers": "Flyers"}
+    label = team_labels.get((team or "").lower(), "Philly sports")
+    try:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=api_key)
+        resp = client.search(
+            f"Philadelphia {label} news today",
+            topic="news",
+            search_depth="basic",
+            max_results=5,
+        )
+        results = resp.get("results") or []
+        if not results:
+            return ""
+        lines = []
+        for r in results[:5]:
+            title = (r.get("title") or "").strip()
+            content = (r.get("content") or "")[:200].strip()
+            if title or content:
+                lines.append(f"- {title}: {content}")
+        return "\n".join(lines) if lines else ""
+    except Exception:
+        return ""
+
+
 def get_daily_summary(team):
     """
     AI-generated summary per calendar day, tailored to the team page.
@@ -172,6 +211,13 @@ def get_daily_summary(team):
     team_label = team_labels[team]
     headlines_text = "\n".join(f"- [{team_labels.get(a.get('team',''), a.get('team',''))}] {a.get('title', '')}" for a in ordered if a.get("title"))
 
+    # Optional: add Tavily context for fresher, real-time angle (e.g. "today" news)
+    tavily_context = _get_tavily_philly_context(team)
+    today_str = date.today().isoformat()
+    user_content = f"Headlines (team in brackets):\n{headlines_text}"
+    if tavily_context:
+        user_content += f"\n\nAdditional context from web search:\n{tavily_context}"
+
     try:
         client = OpenAI(api_key=api_key)
         resp = client.chat.completions.create(
@@ -179,11 +225,12 @@ def get_daily_summary(team):
             messages=[
                 {
                     "role": "system",
-                    "content": f"You write the 'Philly sports in 60 seconds' summary for the {team_label} page. Lead with {team_label} news. Mention other Philly teams (Eagles, 76ers, Phillies, Flyers) only when relevant. Tone: casual fan, 2–3 sentences, no fluff. No generic intros like 'Here's what's happening.'",
+                    "content": f"You write the 'Philly sports in 60 seconds' summary for the {team_label} page. Lead with {team_label} news. Mention other Philly teams only when relevant. Tone: casual fan, 2–3 sentences, no fluff. No generic intros like 'Here's what's happening.' "
+                    f"Today's date is {today_str}. Base the summary ONLY on the headlines and any context below. Do not invent season context: do not say 'gearing up for the season,' 'training camp approaches,' or 'offseason' unless a headline or the context explicitly mentions it. If headlines describe in-season games, injuries, or standings, reflect that; if they mention draft, offseason, or training camp, reflect that.",
                 },
                 {
                     "role": "user",
-                    "content": f"Based on these headlines (team in brackets), write a 2–3 sentence summary for the {team_label} page. Lead with {team_label}.\n\n{headlines_text}",
+                    "content": f"Write a 2–3 sentence summary for the {team_label} page. Lead with {team_label}. Use only the information below.\n\n{user_content}",
                 },
             ],
             max_tokens=150,
@@ -192,7 +239,7 @@ def get_daily_summary(team):
         summary = (resp.choices[0].message.content or "").strip()
         if not summary:
             return None
-        cache.set(cache_key, summary, timeout=86400 * 2)  # 2 days
+        cache.set(cache_key, summary, timeout=43200)  # 12 hours so summary stays current
         return summary
     except Exception:
         return None
@@ -221,7 +268,7 @@ def get_eagles_articles():
     titles, urls, images, blurbs, authors = merged
     if titles and urls:
         titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
         )
     return titles, urls, images, blurbs, authors
 
@@ -311,7 +358,7 @@ def get_sixers_articles():
     titles, urls, images, blurbs, authors = merged
     if titles and urls:
         titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
         )
     return titles, urls, images, blurbs, authors
 
@@ -404,7 +451,7 @@ def get_phillies_articles():
     titles, urls, images, blurbs, authors = merged
     if titles and urls:
         titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
         )
     return titles, urls, images, blurbs, authors
 
@@ -494,7 +541,7 @@ def get_flyers_articles():
     titles, urls, images, blurbs, authors = merged
     if titles and urls:
         titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=10, enhance_all=True
+            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
         )
     return titles, urls, images, blurbs, authors
 

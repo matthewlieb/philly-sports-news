@@ -22,6 +22,8 @@ langchain-core>=0.3.0
 certifi>=2024.0.0
 # Optional: for persisting tweeted_urls on Heroku (set DATABASE_URL)
 psycopg2-binary>=2.9.0
+# Optional: Redis for Flask cache (set REDIS_URL for persistent cache across dyno restarts)
+redis>=4.0.0
 # Content variety: satire images (OpenAI), standalone/trending (Tavily)
 openai>=1.0.0
 tavily-python>=0.5.0
