@@ -40,7 +40,9 @@ app = Flask(__name__)
 _redis_url = _os.environ.get("REDIS_URL")
 if _redis_url:
     app.config["CACHE_TYPE"] = "redis"
-    app.config["CACHE_REDIS_URL"] = _redis_url
+    # Heroku Redis (Key-Value Store) uses TLS with a cert that fails verify; disable so connection works
+    _sep = "&" if "?" in _redis_url else "?"
+    app.config["CACHE_REDIS_URL"] = f"{_redis_url}{_sep}ssl_cert_reqs=none"
 else:
     app.config["CACHE_TYPE"] = "simple"
 app.config["CACHE_DEFAULT_TIMEOUT"] = 3600  # 1 hour default timeout
