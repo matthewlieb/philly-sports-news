@@ -104,11 +104,13 @@ _MAX_PREVIEW_HEADLINES = 3
 # Keep total tweet ≤240 so "phillysportdaily.com" is never truncated in UI
 _MAX_TWEET_CHARS = 240
 _PHILLYSPORTDAILY_SUFFIX = " phillysportdaily.com"  # 22 chars
+_PHILLYSPORTDAILY_SUFFIX_ALT = " more: phillysportdaily.com"  # 28 chars
+_STANDALONE_INCLUDE_PLUG_PROB = 0.5  # ~50% of standalones omit domain (bio link = main conversion)
 
 # Content types: article (link), satire_image (article + generated image), standalone (trending, no article)
 CONTENT_TYPES = ("article", "satire_image", "standalone")
-# Weights: article 55%, satire_image 25%, standalone 20%. Avoid streaks by down-weighting last type.
-_CONTENT_WEIGHTS = {"article": 0.55, "satire_image": 0.25, "standalone": 0.20}
+# Weights: article 52%, satire_image 23%, standalone 25%. Avoid streaks by down-weighting last type.
+_CONTENT_WEIGHTS = {"article": 0.52, "satire_image": 0.23, "standalone": 0.25}
 
 
 def _load_tweeted_urls() -> set[str]:
@@ -344,7 +346,7 @@ def _get_voice_prompt_block():
 
 class TweetOutput(BaseModel):
     tweet_text: str = Field(
-        description="The tweet text, max 240 characters. Must include the exact article_url and end with phillysportdaily.com. Be concise."
+        description="The tweet text, max 240 characters. Must include the exact article_url and end with phillysportdaily.com or 'more: phillysportdaily.com'. Be concise."
     )
     article_url: str = Field(
         description="One of the exact article URLs from the list above. Copy it character-for-character."
@@ -383,9 +385,9 @@ def generate_tweet(
 
     variety_rules = []
     if avoid_opening:
-        variety_rules.append(f"- Do NOT start this tweet with the same opening as last time. Last tweet started with: \"{avoid_opening[:35]}...\". Use a different lead-in: BREAKING, a stat, a question, \"This is wild.\", \"Wild.\", etc. Avoid starting with \"So...\" if you used that recently.")
+        variety_rules.append(f"- Do NOT start this tweet with the same opening as last time. Last tweet started with: \"{avoid_opening[:35]}...\". Use a different lead-in; no single formula.")
     else:
-        variety_rules.append("- Vary your openings. Do not start multiple tweets in a row with \"So...\". Use BREAKING, a stat, a question, \"This is wild.\", \"Wild.\", or a hot take.")
+        variety_rules.append("- Vary your openings. Don't start multiple tweets in a row with the same phrase. Use whatever fits: a stat, a question, a hot take, BREAKING when it's actually breaking—no single formula.")
     if recent_headlines:
         variety_rules.append(f"- Do NOT write about the same story as these recent tweets. Pick a different article/topic. Recent headlines we already tweeted: {', '.join(repr(h[:50]) for h in recent_headlines[:3])}.")
     variety_rules_str = "\n".join(variety_rules)
@@ -394,7 +396,7 @@ def generate_tweet(
 
 Rules for this tweet:
 - tweet_text MUST be at most 240 characters total so the full tweet (including phillysportdaily.com) is visible and never truncated.
-- tweet_text MUST include the exact article_url you choose and MUST end with "phillysportdaily.com" (put the domain at the end).
+- tweet_text MUST include the exact article_url you choose and MUST end with "phillysportdaily.com" or "more: phillysportdaily.com" (vary which you use).
 - article_url MUST be one of the exact URLs from the list below (copy character-for-character).
 - DO NOT just repeat or paraphrase the headline. Lead with YOUR reaction, take, joke, question, or angle—then reference the story and include the link.
 {variety_rules_str}
@@ -410,7 +412,7 @@ Rules for this tweet:
 
 {articles_block}
 
-Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and end with phillysportdaily.com. Keep it under 240 characters total so phillysportdaily.com is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
+Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and end with phillysportdaily.com or "more: phillysportdaily.com" (vary which you use). Keep it under 240 characters total so the domain is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
@@ -437,36 +439,56 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
 
 class StandaloneTweetOutput(BaseModel):
     tweet_text: str = Field(
-        description="The tweet text, max 240 characters. Must end with phillysportdaily.com. No article link."
+        description="The tweet text, max 240 characters. Must end with phillysportdaily.com or 'more: phillysportdaily.com'. No article link."
     )
 
 
-def generate_standalone_tweet(trending_context: str, openai_api_key: str) -> StandaloneTweetOutput | None:
-    """Generate a standalone tweet (no article) from trending/context. Uses Tavily for context."""
+class StandaloneTweetOutputNoPlug(BaseModel):
+    tweet_text: str = Field(
+        description="The tweet text, max 280 characters. No links or domains. Pure fan take: stat, hot take, reaction, or historical note."
+    )
+
+
+def generate_standalone_tweet(trending_context: str, openai_api_key: str, include_plug: bool = True) -> StandaloneTweetOutput | StandaloneTweetOutputNoPlug | None:
+    """Generate a standalone tweet (no article) from trending/context. When include_plug is False, no domain (pure fan content)."""
     from langchain_core.prompts import ChatPromptTemplate
     from langchain_openai import ChatOpenAI
 
     voice_block = _get_voice_prompt_block()
-    system = f"""{voice_block}
+    if include_plug:
+        system = f"""{voice_block}
 
 Rules for this tweet:
-- tweet_text MUST be at most 240 characters total. End with "phillysportdaily.com".
+- tweet_text MUST be at most 240 characters total. End with "phillysportdaily.com" or "more: phillysportdaily.com".
 - NO article link. This is a standalone tweet: can be a reaction to trending news, a stat, a historical moment, a hot take, or a question—not everything has to be article-based.
-- Lead with YOUR reaction, joke, stat, "On this day," hot take, or question. Vary openings; avoid starting with "So..." repeatedly.
+- Lead with YOUR reaction, joke, stat, "On this day," hot take, or question. Vary openings; no single formula.
 - Balance teams when relevant: Eagles, Sixers, Phillies, Flyers. Use hashtags when it fits (#Eagles #sixers #phillies #flyers #TTP #FlyEaglesFly)."""
-
-    user = """Use this trending/context to write a standalone tweet (no article link):
+        user = """Use this trending/context to write a standalone tweet (no article link):
 
 {trending_context}
 
-Write a tweet: reaction to news, a stat, a historical note, or a hot take about Philly sports. Include phillysportdaily.com at the end. Keep under 240 chars."""
+Write a tweet: reaction to news, a stat, a historical note, or a hot take about Philly sports. Include phillysportdaily.com or "more: phillysportdaily.com" at the end. Keep under 240 chars."""
+        out_model = StandaloneTweetOutput
+    else:
+        system = f"""{voice_block}
+
+Rules for this tweet:
+- tweet_text MUST be at most 280 characters. Do NOT include phillysportdaily.com or any URL. This is pure fan content—no link, no plug. The bio link handles discovery.
+- Standalone: a stat, a hot take, "on this day," a reaction to news, or a question. One concrete detail (number, name, year) beats vague praise.
+- Lead with YOUR take. Vary openings; no single formula. Balance teams when relevant (Eagles, Sixers, Phillies, Flyers). Hashtags when it fits."""
+        user = """Use this trending/context to write a standalone tweet with NO link and NO domain:
+
+{trending_context}
+
+Write a pure fan tweet: stat, hot take, historical moment, or reaction. No phillysportdaily.com. Max 280 characters."""
+        out_model = StandaloneTweetOutputNoPlug
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
         ("human", user),
     ])
     llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.8)
-    structured_llm = llm.with_structured_output(StandaloneTweetOutput)
+    structured_llm = llm.with_structured_output(out_model)
     chain = prompt | structured_llm
     return chain.invoke({"trending_context": trending_context})
 
@@ -675,12 +697,22 @@ def post_tweet(text: str, media_path: str | None = None) -> tuple[bool, str | No
     return False, hint
 
 
+def _strip_domain_from_text(text: str) -> str:
+    """Remove phillysportdaily.com and 'more: phillysportdaily.com' from text (for no-plug standalones)."""
+    if not text or "phillysportdaily.com" not in text:
+        return text
+    out = text.replace(" more: phillysportdaily.com", "").replace("more: phillysportdaily.com", "")
+    out = out.replace(" phillysportdaily.com", "").replace("phillysportdaily.com", "")
+    return " ".join(out.split()).strip()
+
+
 def _ensure_suffix(tweet: str) -> str:
-    """Ensure tweet has phillysportdaily.com and is ≤240 chars so the domain is never truncated in UI."""
-    suffix = _PHILLYSPORTDAILY_SUFFIX
+    """Ensure tweet has phillysportdaily.com (or 'more: phillysportdaily.com') and is ≤240 chars so the domain is never truncated in UI. Randomly uses plain or 'more:' when appending."""
+    import random
     max_len = _MAX_TWEET_CHARS
     if "phillysportdaily.com" not in tweet:
         tweet = tweet.rstrip()
+        suffix = random.choice((_PHILLYSPORTDAILY_SUFFIX, _PHILLYSPORTDAILY_SUFFIX_ALT))
         if len(tweet) + len(suffix) <= max_len:
             tweet += suffix
         else:
@@ -701,6 +733,10 @@ def _ensure_suffix(tweet: str) -> str:
 # ---------------------------------------------------------------------------
 
 def main():
+    dry_run = "--dry-run" in sys.argv or os.environ.get("DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+    if dry_run:
+        print("DRY RUN: will not post to X.")
+
     openai_key = os.environ.get("OPENAI_API_KEY")
     if not openai_key:
         print("Set OPENAI_API_KEY in .env_x (repo root)", file=sys.stderr)
@@ -713,13 +749,21 @@ def main():
     if content_type == "standalone":
         print("Searching trending Philly sports (Tavily)...")
         trending = search_trending_philly_sports()
-        print("Generating standalone tweet...")
-        out = generate_standalone_tweet(trending, openai_key)
+        import random
+        include_plug = random.random() < _STANDALONE_INCLUDE_PLUG_PROB
+        print("Generating standalone tweet (with plug)..." if include_plug else "Generating standalone tweet (no plug, pure fan content)...")
+        out = generate_standalone_tweet(trending, openai_key, include_plug=include_plug)
         if not out:
             print("Standalone tweet generation failed.", file=sys.stderr)
             sys.exit(1)
-        tweet = _ensure_suffix(out.tweet_text.strip())
+        raw = out.tweet_text.strip()
+        if not include_plug:
+            raw = _strip_domain_from_text(raw)
+        tweet = _ensure_suffix(raw) if include_plug else raw[:280]
         print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
+        if dry_run:
+            print(f"DRY RUN: would post: {tweet}")
+            return
         success, hint = post_tweet(tweet)
         if success:
             _save_last_content_type("standalone")
@@ -789,6 +833,15 @@ def main():
     print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
     print(f"Article URL: {out.article_url}")
     print(f"Headline: {out.headline_used[:60]}...")
+
+    if dry_run:
+        print(f"DRY RUN: would post: {tweet}")
+        if media_path and os.path.isfile(media_path):
+            try:
+                os.remove(media_path)
+            except OSError:
+                pass
+        return
 
     success, hint = post_tweet(tweet, media_path=media_path)
     if media_path and os.path.isfile(media_path):

@@ -12,6 +12,8 @@ python -m twitter_bot.run
 
 **Test X without posting:** `python -m twitter_bot.test_x` — verifies credentials. If it prints "X API OK", keys are fine.
 
+**Dry-run (generate tweet but don't post):** `python -m twitter_bot.run --dry-run` or `DRY_RUN=1 python -m twitter_bot.run` — runs the full pipeline (fetch articles or trending, generate tweet) and prints what would be posted without calling the X API.
+
 **Test posting with 503 workaround:** `python -m twitter_bot.test_post_503` — posts a test tweet with exponential backoff (6 attempts over ~5 min). Use `--dry-run` to verify keys only, `--xdk` to use official X SDK (api.x.com) instead of Tweepy (api.twitter.com), or `--persist` to retry every 5 min until X accepts the post.
 
 Env is loaded from the repo root: `.env_x` (or `.env`). Required keys:
@@ -27,11 +29,13 @@ Optional:
 
 Each run picks one:
 
-- **article** (~55%) – React to a scraped article, include link + phillysportdaily.com
-- **satire_image** (~25%) – Same as article, plus a DALL·E 3–generated satire image
-- **standalone** (~20%) – No article link; comment on trending Philly sports (Tavily search)
+- **article** (~52%) – React to a scraped article, include link + phillysportdaily.com
+- **satire_image** (~23%) – Same as article, plus a DALL·E 3–generated satire image
+- **standalone** (~25%) – No article link; comment on trending Philly sports (Tavily search). About half of standalones omit the site (pure fan content); the rest may end with phillysportdaily.com.
 
-State is tracked in `data/last_content_type.txt` to avoid streaks. The bot also keeps `data/last_tweet_preview.json` (last opening + recent headlines) so it avoids back-to-back same-article tweets and repeated "So..." openings. Tweets are capped at 240 characters so `phillysportdaily.com` stays visible and isn’t truncated in the UI.
+State is tracked in `data/last_content_type.txt` to avoid streaks. The bot also keeps `data/last_tweet_preview.json` (last opening + recent headlines) so it avoids back-to-back same-article tweets and repeated openings. Tweets that include the site are capped at 240 characters so `phillysportdaily.com` stays visible.
+
+**Promotion strategy:** The **bio link** is the main conversion surface. Article and satire tweets always end with the domain (varied as `phillysportdaily.com` or `more: phillysportdaily.com`). About half of **standalone** tweets are pure fan content with no link or plug; the rest can include the domain. This keeps the feed from feeling like every tweet is an ad.
 
 ## Layout
 
