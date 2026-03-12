@@ -107,10 +107,10 @@ _PHILLYSPORTDAILY_SUFFIX = " phillysportdaily.com"  # 22 chars
 _PHILLYSPORTDAILY_SUFFIX_ALT = " more: phillysportdaily.com"  # 28 chars
 _STANDALONE_INCLUDE_PLUG_PROB = 0.5  # ~50% of standalones omit domain (bio link = main conversion)
 
-# Content types: article (link), satire_image (article + generated image), standalone (trending, no article)
-CONTENT_TYPES = ("article", "satire_image", "standalone")
-# Weights: article 52%, satire_image 23%, standalone 25%. Avoid streaks by down-weighting last type.
-_CONTENT_WEIGHTS = {"article": 0.52, "satire_image": 0.23, "standalone": 0.25}
+# Content types: article (link to story), standalone (trending, no article). No AI-generated images.
+CONTENT_TYPES = ("article", "standalone")
+# Weights: article 67%, standalone 33%. Avoid streaks by down-weighting last type.
+_CONTENT_WEIGHTS = {"article": 0.67, "standalone": 0.33}
 
 
 def _load_tweeted_urls() -> set[str]:
@@ -325,6 +325,9 @@ def choose_content_type() -> str:
 # ---------------------------------------------------------------------------
 # LangChain: structured output + voice (Matthew Lieb via config)
 # ---------------------------------------------------------------------------
+# All tweet generation uses LangChain (ChatOpenAI + with_structured_output) so
+# outputs conform to Pydantic schemas. Article tweets always plug phillysportdaily.com;
+# standalone tweets use include_plug (≈50%) so some tweets plug the site.
 
 from pydantic import BaseModel, Field
 
@@ -398,6 +401,7 @@ Rules for this tweet:
 - tweet_text MUST be at most 240 characters total so the full tweet (including phillysportdaily.com) is visible and never truncated.
 - tweet_text MUST include the exact article_url you choose and MUST end with "phillysportdaily.com" or "more: phillysportdaily.com" (vary which you use).
 - article_url MUST be one of the exact URLs from the list below (copy character-for-character).
+- CRITICAL: The tweet must be ONLY about the one article you choose. The link in your tweet must be that article's URL. Do not mention, summarize, or link to any other article or story. The tweet content must directly react to or discuss the headline and topic of the chosen article only.
 - DO NOT just repeat or paraphrase the headline. Lead with YOUR reaction, take, joke, question, or angle—then reference the story and include the link.
 {variety_rules_str}
 - The list below contains only articles we have NOT tweeted yet; pick one of these.
@@ -408,11 +412,11 @@ Rules for this tweet:
         others = [t for t in ("eagles", "sixers", "phillies", "flyers") if t != last_tweeted_team]
         rotation_hint = f"\nLast tweet was {last_tweeted_team}. Prefer picking from {', '.join(others)} this time.\n\n"
 
-    user = """{rotation_hint}Use ONLY the following articles. Pick one and use its exact URL.
+    user = """{rotation_hint}Use ONLY the following articles. Pick ONE article. Your tweet must be exclusively about that article—do not reference or link to any other story. Use that article's exact URL in your tweet.
 
 {articles_block}
 
-Write a tweet that REACTS to or comments on the article in your voice—do not just restate the headline. Include the exact article URL and end with phillysportdaily.com or "more: phillysportdaily.com" (vary which you use). Keep it under 240 characters total so the domain is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list), and headline_used (exact headline from the article)."""
+Write a tweet that REACTS to or comments on the article you chose—do not just restate the headline. The tweet must be solely about that article; the link in the tweet must be that article's URL. Include the exact article URL and end with phillysportdaily.com or "more: phillysportdaily.com" (vary which you use). Keep it under 240 characters total so the domain is never cut off. Respond with tweet_text (full tweet), article_url (exact URL from the list for the article you wrote about), and headline_used (exact headline from that article)."""
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system),
@@ -429,12 +433,70 @@ Write a tweet that REACTS to or comments on the article in your voice—do not j
     })
 
     if out.article_url not in allowed_urls:
+        # Model returned a URL not in the list—don't use that tweet (would mismatch link and content). Generate for first candidate only.
+        fallback_article = articles[0]
+        fallback_out = _generate_tweet_for_single_article(
+            fallback_article, openai_api_key, voice_block=voice_block, variety_rules_str=variety_rules_str
+        )
+        if fallback_out:
+            return fallback_out
         out.article_url = allowed_urls[0] if allowed_urls else ""
         for a in articles:
-            if a.get("url") == out.article_url:
-                out.headline_used = a.get("title", "")
+            if (a.get("url") or "").strip() == out.article_url:
+                out.headline_used = (a.get("title") or "").strip()
                 break
+    # Ensure tweet text contains the article URL we're using (tweet must be about this article)
+    if out.article_url and out.article_url not in (out.tweet_text or ""):
+        out.tweet_text = ((out.tweet_text or "").rstrip() + " " + out.article_url).strip()
     return out
+
+
+def _generate_tweet_for_single_article(
+    article: dict,
+    openai_api_key: str,
+    voice_block: str,
+    variety_rules_str: str,
+) -> TweetOutput | None:
+    """Generate a tweet for exactly one article (LangChain structured output). Used when main generator returns wrong URL."""
+    from langchain_core.prompts import ChatPromptTemplate
+    from langchain_openai import ChatOpenAI
+
+    url = (article.get("url") or "").strip()
+    title = (article.get("title") or "").strip()
+    blurb = (article.get("description") or "")[:200].strip()
+    if not url or not title:
+        return None
+
+    system = f"""{voice_block}
+
+Rules for this tweet:
+- tweet_text MUST be at most 240 characters total and MUST end with "phillysportdaily.com" or "more: phillysportdaily.com".
+- tweet_text MUST include this exact URL: {url}
+- The tweet must be ONLY about this article. Do not reference any other story.
+{variety_rules_str}
+- Lead with YOUR reaction, take, joke, or angle—do not just restate the headline."""
+
+    user = """Write a tweet about ONLY this article. Use the exact URL in your tweet and end with phillysportdaily.com or "more: phillysportdaily.com". Keep under 240 characters.
+
+HEADLINE: {title}
+URL: {url}
+BLURB: {blurb}
+
+Respond with tweet_text (full tweet including the URL), article_url (exact URL above), and headline_used (exact headline above)."""
+
+    prompt = ChatPromptTemplate.from_messages([("system", system), ("human", user)])
+    llm = ChatOpenAI(model="gpt-4o-mini", api_key=openai_api_key, temperature=0.7)
+    structured_llm = llm.with_structured_output(TweetOutput)
+    chain = prompt | structured_llm
+    try:
+        out = chain.invoke({"title": title, "url": url, "blurb": blurb})
+    except Exception:
+        return None
+    if out and (out.article_url or "").strip() == url:
+        if out.article_url not in (out.tweet_text or ""):
+            out.tweet_text = ((out.tweet_text or "").rstrip() + " " + url).strip()
+        return out
+    return TweetOutput(tweet_text=f"{title[:180]} {url} phillysportdaily.com", article_url=url, headline_used=title)
 
 
 class StandaloneTweetOutput(BaseModel):
@@ -522,54 +584,6 @@ def search_trending_philly_sports() -> str:
     except Exception as e:
         print(f"Warning: Tavily search failed ({e}), using fallback context", file=sys.stderr)
         return "Philadelphia Eagles, 76ers, Phillies, Flyers - general Philly sports news."
-
-
-def generate_satire_image(headline: str, team: str, openai_api_key: str) -> str | None:
-    """Generate a satire image via DALL·E 3. Returns path to saved PNG or None."""
-    try:
-        from twitter_bot.config.image_prompts import build_satire_prompt
-    except ImportError:
-        def build_satire_prompt(h, t):
-            return f"Satirical oil painting of Philly sports fan, {t or 'Philadelphia'}, dramatic lighting. {h[:80]}"
-
-    prompt = build_satire_prompt(headline, team)
-    try:
-        from openai import OpenAI
-        client = OpenAI(api_key=openai_api_key)
-        resp = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt[:1000],
-            size="1024x1024",
-            quality="standard",
-            n=1,
-            response_format="url",
-        )
-        url = resp.data[0].url if resp.data else None
-        if not url:
-            return None
-
-        import tempfile
-        import urllib.request
-        fd, path = tempfile.mkstemp(suffix=".png")
-        try:
-            with urllib.request.urlopen(url) as r:
-                with os.fdopen(fd, "wb") as f:
-                    f.write(r.read())
-            return path
-        except Exception:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-            if os.path.isfile(path):
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
-            return None
-    except Exception as e:
-        print(f"Warning: DALL·E image generation failed: {e}", file=sys.stderr)
-        return None
 
 
 # ---------------------------------------------------------------------------
@@ -729,7 +743,8 @@ def _ensure_suffix(tweet: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Main
+# Main — 3 tweets per day: historic (morning), article (midday), day_review (~10pm ET)
+# No DALE/images. All tweets end with phillysportdaily.com.
 # ---------------------------------------------------------------------------
 
 def main():
@@ -742,31 +757,34 @@ def main():
         print("Set OPENAI_API_KEY in .env_x (repo root)", file=sys.stderr)
         sys.exit(1)
 
-    content_type = choose_content_type()
-    print(f"Content type: {content_type}")
+    from twitter_bot import tweet_slots
 
-    # ---- STANDALONE: trending, no article ----
-    if content_type == "standalone":
-        print("Searching trending Philly sports (Tavily)...")
-        trending = search_trending_philly_sports()
-        import random
-        include_plug = random.random() < _STANDALONE_INCLUDE_PLUG_PROB
-        print("Generating standalone tweet (with plug)..." if include_plug else "Generating standalone tweet (no plug, pure fan content)...")
-        out = generate_standalone_tweet(trending, openai_key, include_plug=include_plug)
+    slot = tweet_slots.get_tweet_slot()
+    print(f"Tweet slot: {slot}")
+
+    if tweet_slots.already_posted_slot_today(slot):
+        print(f"Already posted {slot} today. Skipping.")
+        sys.exit(0)
+
+    # ---- Historic (morning): on this day in Philly sports ----
+    if slot == "historic":
+        print("Searching on-this-day Philly sports history (Tavily)...")
+        out = tweet_slots.generate_historic_tweet(openai_key)
         if not out:
-            print("Standalone tweet generation failed.", file=sys.stderr)
+            print("Historic tweet generation failed.", file=sys.stderr)
             sys.exit(1)
-        raw = out.tweet_text.strip()
-        if not include_plug:
-            raw = _strip_domain_from_text(raw)
-        tweet = _ensure_suffix(raw) if include_plug else raw[:280]
+        tweet = out.tweet_text
+        ch = tweet_slots.content_hash_for_dedup(tweet)
+        if tweet_slots.content_hash_seen_recently(ch, days=14):
+            print("Very similar historic tweet posted recently. Skipping to avoid duplicate.")
+            sys.exit(0)
         print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
         if dry_run:
             print(f"DRY RUN: would post: {tweet}")
             return
         success, hint = post_tweet(tweet)
         if success:
-            _save_last_content_type("standalone")
+            tweet_slots.record_tweet("historic", tweet, None)
             print("Done.")
         else:
             if hint in ("503", "429"):
@@ -775,95 +793,80 @@ def main():
             sys.exit(1)
         return
 
-    # ---- ARTICLE or SATIRE_IMAGE: need articles ----
-    print("Fetching articles...")
-    articles = _build_all_articles()
-    if not articles:
-        print("No articles found.", file=sys.stderr)
-        sys.exit(1)
-    print(f"Ranked {len(articles)} articles.")
-
-    tweeted_urls = _load_tweeted_urls()
-    candidates = [a for a in articles if (a.get("url") or "").strip() not in tweeted_urls]
-    if not candidates:
-        print("No new articles to tweet (all have been used recently). Exiting.", file=sys.stderr)
-        sys.exit(0)
-    if len(candidates) < len(articles):
-        print(f"Excluding {len(articles) - len(candidates)} already-tweeted articles; {len(candidates)} candidates.")
-
-    last_team = _load_last_tweeted_team()
-    if last_team:
-        def _rotation_key(a):
-            t = (a.get("team") or "").strip().lower()
-            return (0 if t != last_team else 1, a.get("url", ""))
-        candidates = sorted(candidates, key=_rotation_key)
-        print(f"Sports rotation: last was {last_team}, preferring others.")
-
-    avoid_opening, recent_headlines = _load_last_tweet_preview()
-    if avoid_opening:
-        print(f"Avoiding same opening as last tweet: \"{avoid_opening}...\"")
-
-    print("Generating tweet (LangChain + your voice)...")
-    out = generate_tweet(
-        candidates,
-        openai_key,
-        last_tweeted_team=last_team,
-        avoid_opening=avoid_opening,
-        recent_headlines=recent_headlines,
-    )
-    if not out:
-        print("Tweet generation failed.", file=sys.stderr)
-        sys.exit(1)
-
-    tweet = _ensure_suffix(out.tweet_text.strip())
-    media_path = None
-
-    if content_type == "satire_image":
-        article = next((a for a in candidates if (a.get("url") or "").strip() == (out.article_url or "").strip()), None)
-        if article:
-            print("Generating satire image (DALL·E 3)...")
-            media_path = generate_satire_image(
-                article.get("title", ""),
-                article.get("team", ""),
-                openai_key,
-            )
-            if not media_path:
-                print("Satire image failed, posting text-only.", file=sys.stderr)
-
-    print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
-    print(f"Article URL: {out.article_url}")
-    print(f"Headline: {out.headline_used[:60]}...")
-
-    if dry_run:
-        print(f"DRY RUN: would post: {tweet}")
-        if media_path and os.path.isfile(media_path):
-            try:
-                os.remove(media_path)
-            except OSError:
-                pass
+    # ---- Article (midday): one article reference from Eagles/Sixers/Flyers/Phillies ----
+    if slot == "article":
+        print("Searching today's Philly sports articles (Tavily)...")
+        articles = tweet_slots.search_article_philly_sports()
+        if not articles or len(articles) < 2:
+            print("Tavily returned few results; using scrapers as fallback.")
+            ranked = _build_all_articles()
+            articles = [
+                {"title": a.get("title") or "", "url": (a.get("url") or "").strip(), "content": (a.get("description") or "")[:300]}
+                for a in (ranked or [])
+                if (a.get("url") or "").strip()
+            ]
+        if not articles:
+            print("No articles found.", file=sys.stderr)
+            sys.exit(1)
+        print(f"Using {len(articles)} article(s).")
+        tweeted_urls = _load_tweeted_urls()
+        last_team = _load_last_tweeted_team()
+        out = tweet_slots.generate_article_tweet(articles, openai_key, tweeted_urls, last_team)
+        if not out:
+            print("Article tweet generation failed.", file=sys.stderr)
+            sys.exit(1)
+        tweet = out.tweet_text
+        print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
+        print(f"Article URL: {out.article_url}")
+        if dry_run:
+            print(f"DRY RUN: would post: {tweet}")
+            return
+        success, hint = post_tweet(tweet)
+        if success:
+            _append_tweeted_url(out.article_url)
+            tweet_slots.record_tweet("article", tweet, out.article_url)
+            # Infer team from URL/headline for rotation if possible
+            for team in ("eagles", "sixers", "phillies", "flyers"):
+                if team in (out.headline_used or "").lower() or team in (out.article_url or "").lower():
+                    _save_last_tweeted_team(team)
+                    break
+            print("Done.")
+        else:
+            if hint in ("503", "429"):
+                print("X API unavailable (503/429). Will retry next scheduled run.", file=sys.stderr)
+                sys.exit(0)
+            sys.exit(1)
         return
 
-    success, hint = post_tweet(tweet, media_path=media_path)
-    if media_path and os.path.isfile(media_path):
-        try:
-            os.remove(media_path)
-        except OSError:
-            pass
-
-    if success:
-        _append_tweeted_url(out.article_url)
-        _save_last_tweet_preview(tweet, out.headline_used or "")
-        for a in candidates:
-            if (a.get("url") or "").strip() == (out.article_url or "").strip():
-                _save_last_tweeted_team(a.get("team"))
-                break
-        _save_last_content_type(content_type)
-        print("Done.")
-    else:
-        if hint in ("503", "429"):
-            print("X API unavailable (503/429). Will retry next scheduled run.", file=sys.stderr)
+    # ---- Day in review (~10pm ET): Eagles, Sixers, Phillies, Flyers wrap-up ----
+    if slot == "day_review":
+        print("Searching day-in-review Philly sports (Tavily)...")
+        out = tweet_slots.generate_day_review_tweet(openai_key)
+        if not out:
+            print("Day review tweet generation failed.", file=sys.stderr)
+            sys.exit(1)
+        tweet = out.tweet_text
+        ch = tweet_slots.content_hash_for_dedup(tweet)
+        if tweet_slots.content_hash_seen_recently(ch, days=7):
+            print("Very similar day review posted recently. Skipping.")
             sys.exit(0)
-        sys.exit(1)
+        print(f"Tweet ({len(tweet)} chars): {tweet[:80]}...")
+        if dry_run:
+            print(f"DRY RUN: would post: {tweet}")
+            return
+        success, hint = post_tweet(tweet)
+        if success:
+            tweet_slots.record_tweet("day_review", tweet, None)
+            print("Done.")
+        else:
+            if hint in ("503", "429"):
+                print("X API unavailable (503/429). Will retry next scheduled run.", file=sys.stderr)
+                sys.exit(0)
+            sys.exit(1)
+        return
+
+    print("Unknown slot.", file=sys.stderr)
+    sys.exit(1)
 
 
 if __name__ == "__main__":

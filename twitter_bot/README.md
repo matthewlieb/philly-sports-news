@@ -1,20 +1,20 @@
 # Twitter bot for @sport_philly
 
-Daily Philly sports tweets using scraped articles + LangChain + OpenAI. Voice and examples are in `config/voice.py`.
+Daily Philly sports tweets: **3 tweets per day** (historic, article, day-in-review). Uses Tavily for up-to-date search, LangChain for structured output, and your voice from `config/voice.py`. No DALE/images. **Only the article tweet (midday) ends with phillysportdaily.com**; historic and day_review are pure fan tweets with no domain.
 
 ## Run from repo root
 
 ```bash
 cd /path/to/philly-sports-news
-pip install -r requirements.txt   # includes tweepy, langchain-openai, langchain-core
+pip install -r requirements.txt   # includes tweepy, langchain-openai, langchain-core, tavily-python
 python -m twitter_bot.run
 ```
 
 **Test X without posting:** `python -m twitter_bot.test_x` — verifies credentials. If it prints "X API OK", keys are fine.
 
-**Dry-run (generate tweet but don't post):** `python -m twitter_bot.run --dry-run` or `DRY_RUN=1 python -m twitter_bot.run` — runs the full pipeline (fetch articles or trending, generate tweet) and prints what would be posted without calling the X API.
+**Dry-run (generate tweet but don't post):** `python -m twitter_bot.run --dry-run` or `DRY_RUN=1 python -m twitter_bot.run` — runs the full pipeline and prints what would be posted without calling the X API.
 
-**Test posting with 503 workaround:** `python -m twitter_bot.test_post_503` — posts a test tweet with exponential backoff (6 attempts over ~5 min). Use `--dry-run` to verify keys only, `--xdk` to use official X SDK (api.x.com) instead of Tweepy (api.twitter.com), or `--persist` to retry every 5 min until X accepts the post.
+**Test posting with 503 workaround:** `python -m twitter_bot.test_post_503` — posts a test tweet with exponential backoff.
 
 Env is loaded from the repo root: `.env_x` (or `.env`). Required keys:
 
@@ -23,44 +23,62 @@ Env is loaded from the repo root: `.env_x` (or `.env`). Required keys:
 
 Optional:
 
-- `TAVILY_API_KEY` – for standalone/trending tweets (search). Without it, standalone tweets use fallback context.
+- `TAVILY_API_KEY` – used for all three slots (historic search, article search, day-in-review). Without it, historic/day_review use fallback context and article slot falls back to scrapers only.
+- `DATABASE_URL` – if set (e.g. Postgres), the bot stores tweeted URLs and a `tweet_log` table (slot, text hash, URL) to avoid duplicates and same-slot twice per day across restarts.
 
-## Content types (varied automatically)
+## Three daily slots
 
-Each run picks one:
+Each run posts **one** tweet based on the current time (or `TWEET_SLOT` env):
 
-- **article** (~52%) – React to a scraped article, include link + phillysportdaily.com
-- **satire_image** (~23%) – Same as article, plus a DALL·E 3–generated satire image
-- **standalone** (~25%) – No article link; comment on trending Philly sports (Tavily search). About half of standalones omit the site (pure fan content); the rest may end with phillysportdaily.com.
+| Slot        | Time (UTC) | Time (ET) | Content |
+|------------|------------|-----------|---------|
+| **historic**   | 13:00      | 8:00 AM   | “On this day” in Philadelphia sports history (Eagles, 76ers, Phillies, Flyers). Tavily + LangChain. No link, no domain. |
+| **article**    | 18:00      | 1:00 PM   | One article of the day (Eagles/Sixers/Flyers/Phillies). Tavily first, scrapers as fallback. **Includes link and ends with phillysportdaily.com** (only tweet of the day with the domain). |
+| **day_review** | 03:00      | 10:00 PM  | Day in review: wrap-up of Philly sports news across all four teams. Tavily + LangChain. No link, no domain. |
 
-State is tracked in `data/last_content_type.txt` to avoid streaks. The bot also keeps `data/last_tweet_preview.json` (last opening + recent headlines) so it avoids back-to-back same-article tweets and repeated openings. Tweets that include the site are capped at 240 characters so `phillysportdaily.com` stays visible.
+- **historic** and **day_review** are text-only, no article link and no phillysportdaily.com (pure fan content; bio link is the main conversion).
+- **article** is the only tweet that ends with phillysportdaily.com and includes the article URL.
+- The bot skips a slot if it already posted that slot today (by UTC date), and avoids posting very similar tweets (content hash) within 7–14 days.
 
-**Promotion strategy:** The **bio link** is the main conversion surface. Article and satire tweets always end with the domain (varied as `phillysportdaily.com` or `more: phillysportdaily.com`). About half of **standalone** tweets are pure fan content with no link or plug; the rest can include the domain. This keeps the feed from feeling like every tweet is an ad.
+Override the slot for a manual run: `TWEET_SLOT=historic python -m twitter_bot.run` (or `article`, `day_review`).
 
 ## Layout
 
-- `run.py` – entry point: choose content type, fetch/generate, post (Tweepy/xdk).
+- `run.py` – entry point: detect slot, generate tweet, post (Tweepy/xdk).
+- `tweet_slots.py` – slot logic, Tavily search, LangChain generators, tweet tracking (file or DB).
 - `config/voice.py` – `VOICE_DESCRIPTION` and `EXAMPLE_TWEETS`. Edit to match your voice.
-- `config/image_prompts.py` – Satire image prompt templates for DALL·E 3.
-- `data/tweeted_urls.txt` – URLs we already tweeted (no reuse); trimmed to last 500.
-- `data/last_tweeted_team.txt` – Last team tweeted (Eagles/Sixers/Phillies/Flyers rotation).
-- `data/last_content_type.txt` – Last content type (article/satire_image/standalone).
-- `data/last_tweet_preview.json` – Last tweet opening + recent headlines (avoids same-article and "So..." repetition).
-- `docs/` – bot-specific docs (e.g. satire-images.md).
+- `data/tweeted_urls.txt` – Article URLs already tweeted (no reuse); trimmed to last 500.
+- `data/last_tweeted_team.txt` – Last team used for article rotation.
+- `data/last_slot_date.txt` – Which slot was posted on which date (avoid same slot twice per day).
+- `data/tweet_hashes.txt` – Content hashes of recent tweets (avoid near-duplicates).
+- `docs/` – bot-specific docs.
 
 ## Scheduling
+
+GitHub Actions runs the workflow at **3 times per day** (see `.github/workflows/tweet-schedule.yml`): 03:00, 13:00, 18:00 UTC. The runner infers the slot from the hour and posts one tweet per run.
 
 From repo root, e.g. cron:
 
 ```bash
-0 9 * * * cd /path/to/philly-sports-news && python -m twitter_bot.run
+0 3,13,18 * * * cd /path/to/philly-sports-news && python -m twitter_bot.run
 ```
 
-Or Heroku Scheduler / GitHub Actions with the same command and env vars.
+Or Heroku Scheduler / GitHub Actions with the same command and env vars. Ensure **TAVILY_API_KEY** is set in secrets for best results.
+
+## Database (optional)
+
+If you set `DATABASE_URL` (e.g. Heroku Postgres or another Postgres):
+
+- **tweeted_urls** – same as file: URLs we already tweeted (article slot).
+- **tweet_log** – one row per posted tweet: `slot_type`, `tweet_text` (truncated), `content_hash`, `article_url`, `posted_at`. Used to:
+  - Enforce “at most one post per slot per day”.
+  - Avoid reposting the same or very similar tweet within a configurable window (e.g. 14 days for historic, 7 for day_review).
+
+The bot creates the tables if they don’t exist. Without `DATABASE_URL`, it uses the `data/` files above (and the workflow commits them after each run).
 
 ## Ready to test
 
-1. From repo root, install deps and run once (this will **post a real tweet**):
+1. From repo root, install deps and run once (this will **post a real tweet** for the current slot):
 
    ```bash
    cd /path/to/philly-sports-news
@@ -68,8 +86,8 @@ Or Heroku Scheduler / GitHub Actions with the same command and env vars.
    python -m twitter_bot.run
    ```
 
-2. Ensure `.env_x` has `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, and `OPENAI_API_KEY`.
+2. Ensure `.env_x` has `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET`, `OPENAI_API_KEY`, and `TAVILY_API_KEY`.
 
-3. The script will fetch articles, generate one tweet in your voice, and post it to @sport_philly. Check [https://x.com/sport_philly](https://x.com/sport_philly) after running.
+3. The script will pick the slot from the current UTC hour (or `TWEET_SLOT`), generate one tweet, and post to @sport_philly. Check [https://x.com/sport_philly](https://x.com/sport_philly) after running.
 
-**Why "no articles" for some feeds?** The bot and the website both use many sources per team (SBNation RSS, NBC Sports, PhillyVoice, official sites, FanSided). If a few RSS URLs return HTML or empty data, the rest still supply plenty — so you still see "Ranked 20 articles" and the site works. The warnings are only for the feeds that failed that run.
+**Why “no articles” for some feeds?** The article slot uses Tavily first; if Tavily returns few results, it falls back to the same scrapers as the website (SBNation, NBC Sports, PhillyVoice, etc.). If a few sources fail, the rest still supply articles.

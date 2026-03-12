@@ -1,17 +1,22 @@
-# Tweet 4x per day (under X free tier 500 posts/month)
-# Times: 01:00, 13:00, 18:00, 21:00 UTC (~8pm, 8am, 1pm, 6pm ET)
+# 3 tweets per day: morning (historic), midday (article), ~10pm ET (day review)
+# Times: 13:00 UTC = 8am ET, 18:00 UTC = 1pm ET, 03:00 UTC = 10pm ET
 name: Tweet schedule
 
 on:
   schedule:
-    - cron: '0 1,13,18,21 * * *'
-  workflow_dispatch: # allow manual run from Actions tab
+    - cron: '0 3,13,18 * * *'
+  workflow_dispatch:
+    inputs:
+      slot:
+        description: 'Optional: historic | article | day_review (default: auto from UTC hour)'
+        required: false
+        default: ''
 
 jobs:
   tweet:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # push tweeted_urls.txt after run
+      contents: write  # push tweeted_urls and slot/hash data after run
     steps:
       - uses: actions/checkout@v4
 
@@ -31,11 +36,12 @@ jobs:
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          TWEET_SLOT: ${{ inputs.slot }}
         run: python -m twitter_bot.run
 
-      - name: Commit tweeted_urls, last_tweeted_team, last_content_type if changed
+      - name: Commit tweeted_urls, slot date, hashes, last_tweeted_team if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add twitter_bot/data/tweeted_urls.txt twitter_bot/data/last_tweeted_team.txt twitter_bot/data/last_content_type.txt 2>/dev/null || true
-          git diff --staged --quiet || (git commit -m "chore(bot): update tweeted_urls, last_tweeted_team, last_content_type after scheduled run" && git push)
+          git add twitter_bot/data/tweeted_urls.txt twitter_bot/data/last_slot_date.txt twitter_bot/data/tweet_hashes.txt twitter_bot/data/last_tweeted_team.txt 2>/dev/null || true
+          git diff --staged --quiet || (git commit -m "chore(bot): update tweet tracking data after scheduled run" && git push)
