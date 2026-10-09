@@ -83,3 +83,6 @@ flask_output.log
 
 # Twitter bot: old local state files (state now lives in Redis)
 twitter_bot/data/
+
+# Rendered shorts
+*.mp4
