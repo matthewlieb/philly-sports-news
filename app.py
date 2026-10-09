@@ -172,6 +172,11 @@ def ads_txt():
     return Response(f"google.com, {pub}, DIRECT, f08c47fec0942fa0\n", mimetype="text/plain")
 
 
+@app.route("/googlefc317b0f2c8dfa8c.html")
+def search_console_verification():
+    return Response("google-site-verification: googlefc317b0f2c8dfa8c.html", mimetype="text/html")
+
+
 @app.route("/sitemap.xml")
 def sitemap():
     today = brief_store.local_today()
