@@ -10,7 +10,9 @@ Production runs on [Railway](https://railway.com) (project `philly-sports-news`)
 | `daily-briefs` | `python -m jobs.daily_briefs` (writes one brief per team) | `0 11 * * *` (7am ET in summer, 6am in winter) |
 | `tweet-bot` | `python -m twitter_bot.run` (one tweet per run) | `0 3,13,18 * * *` |
 
-All three build from this GitHub repo. Cron services start, do their work and exit, so they cost almost nothing.
+All three build from this GitHub repo and redeploy on every push to `main`. Cron services start, do their work and exit, so they cost almost nothing.
+
+**`tweet-bot` is paused** (October 2026): the X API became pay-per-use ($0.015 per post, $0.20 per post with a link) and the account has no credits. Its start command is temporarily an `echo` and its cron is weekly. To resume, add credits in the X developer console, set the start command back to `python -m twitter_bot.run` and the cron back to `0 3,13,18 * * *`.
 
 ## Environment variables
 
