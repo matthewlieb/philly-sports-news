@@ -7,6 +7,7 @@ Scheduled on Railway after the daily briefs are written.
 """
 import argparse
 import json
+import os
 import sys
 import tempfile
 from datetime import datetime
@@ -55,6 +56,9 @@ def main():
     args = p.parse_args()
     day = args.date or briefs.local_today()
 
+    if args.publish and not (os.environ.get("YOUTUBE_REFRESH_TOKEN") or os.environ.get("IG_USER_ID")):
+        print("No YouTube or Instagram account connected yet. Skipping.")
+        return
     posted_key = store.key("shorts", args.team, day)
     if args.publish and store.client().get(posted_key):
         print(f"Already published the {args.team} short for {day}.")
