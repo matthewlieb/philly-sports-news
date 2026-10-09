@@ -37,7 +37,7 @@
         {% for p in section.paragraphs %}<p>{{ p }}</p>{% endfor %}
         {% if section.sources %}
         <p class="section-sources">Sources:
-          {% for s in section.sources %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.source }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+          {% for s in section.sources | unique(attribute='source') %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.source }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
         </p>
         {% endif %}
       </section>
