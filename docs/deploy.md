@@ -9,6 +9,7 @@ Production runs on [Railway](https://railway.com) (project `philly-sports-news`)
 | `web` | `gunicorn` from the `Procfile`, serves phillysportdaily.com | always on |
 | `daily-briefs` | `python -m jobs.daily_briefs` (writes one brief per team) | `0 11 * * *` (7am ET in summer, 6am in winter) |
 | `tweet-bot` | `python -m twitter_bot.run` (one tweet per run) | `0 3,13,18 * * *` |
+| `eagles-shorts` | `python -m shorts.run --team eagles --publish` (daily video, see `shorts/README.md`) | `30 11 * * *` |
 
 All three build from this GitHub repo and redeploy on every push to `main`. Cron services start, do their work and exit, so they cost almost nothing.
 
