@@ -1,375 +1,113 @@
-.eagles-body{
-  background-image: url("phillySportsNewsEagles.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-.sixers-body{
-  background-image: url("phillySportsNewsSixers.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-.phillies-body{
-  background-image: url("phillySportsNewsPhillies.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-.flyers-body{
-  background-image: url("phillySportsNewsFlyers.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-}
-
-@media (min-width: 1250px) {
-  .container {
-    max-width: 1400px;
-  }
-}
-
-/*Styling for rows */
-.row {
-  background-color: #fff;
-  margin: 0 -15px;
-  padding: 24px;
-}
-
-@media (max-width: 768px) {
-  .row {
-    padding: 16px;
-  }
-}
-
-.row1 .card{
-  background-color: #fff;
-}
-
-.row1 .card h3{
-  color: black;
-}
-
-.row1 p{
-  color:black;
-}
-
-.eagles-navbar-toggler{
-  background-color: #22656E;
-}
-
-.sixers-navbar-toggler{
-  background-color: #3A8AC3;
-}
-
-.phillies-navbar-toggler{
-  background-color: #EC5E6A;
-}
-
-.flyers-navbar-toggler{
-  background-color: #E6650B;
-}
-
-/*Styling for navbar */
-.eagles-navbar {
-  background-color: #014A53;
-}
-
-.sixers-navbar {
-  background-color: #006BB8;
-}
-
-.phillies-navbar {
-  background-color: #E81828;
-}
-
-.flyers-navbar {
-  background-color: #FD4300;
-}
-
-.navbar-brand, .nav-link {
-  font-weight: bold;
-  color: #fff;
-}
-
-.nav-link {
-  font-size: 1.2rem;
-  color: #fff;
-}
-
-.nav-link:hover, .nav-link:focus {
-  padding: 1rem;
-}
-
-.nav-item {
-  padding: 0 1rem;
-  color: #fff;
-}
-
-.navbar-brand, .nav-link {
-  color: #fff !important; /* Set the color of the text to white */
-}
-
-.navbar{
-  position: sticky;
-  top: 0;
-  z-index: 9999;
-}
-
-/*Styling for ticker */
-#ticker {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  overflow: hidden;
-  position: sticky;
-  top: 60.8px;
-  z-index: 9998;
-
-}
-
-@media (max-width: 991px) {
-  #ticker {
-    top: 56px;
-  }
-}
-
-#ticker .carousel-item {
-  color: #222;
-  font-size: 1rem;
-  font-weight: bold;
-  text-align: center;
-}
-
-#ticker .carousel-item p {
-  margin: 0;
-  padding: 15px;
-  color: black;
-}
-
-#ticker .carousel-control-prev,
-#ticker .carousel-control-next {
-  color: #222;
-  font-size: 1.2rem;
-}
-
-#ticker .carousel-control-prev:hover,
-#ticker .carousel-control-next:hover {
-  color: #fff;
-  text-decoration: none;
-}
-
-.carousel-control-prev-icon,
-.carousel-control-next-icon {
-  filter: invert(100%);
-}
-
-.img-fluid {
-  width: 100%; /* Set the width to 100% of the container */
-  height: 100%; /* Set the height to 100% of the container */
-  object-fit: cover; /* Resize the image to cover the container */
-}
-
-p{
-  vertical-align: middle;
-  color: white;
-}
-
-/*Styling for cards*/
-.card {
-  border: 1px solid #e5e7eb;
-  border-radius: var(--card-radius);
-  box-shadow: var(--card-shadow);
-  margin: 15px;
-  padding: 0;
-  background-color: #3A8AC3;
-  overflow: hidden;
-  transition: box-shadow var(--transition-fast), transform var(--transition-fast);
-}
-
-.card:hover {
-  box-shadow: var(--card-shadow-hover);
-}
-
-.card .card-img-top {
-  border-radius: var(--card-radius) var(--card-radius) 0 0;
-  min-height: 180px;
-  object-fit: cover;
-  background-color: #1a1a2e;
-}
-
-.eagles-card {
-  background-color:#22656E;
-}
-
-.phillies-card {
-  background-color:#EC5E6A;
-}
-
-.flyers-card {
-  background-color:#E6650B;
-}
-
-.card h3 {
-  width: 100%;
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.card .card-body {
-  padding: 1rem 1.25rem;
-}
-
-.card .card-body p {
-  font-size: 0.95rem;
-  line-height: 1.5;
-  margin-bottom: 0.5rem;
-}
-
-.footer {
-  background-color: #006BB8;
-  color: #fff;
-  text-align: center;
-  padding: 20px;
-  width: 100%;
-}
-
-.footer a{
-  color: white;
-}
-
-.eagles-footer {
-  background-color: #014A53;
-}
-
-.phillies-footer {
-  background-color: #E81828;
-}
-
-.flyers-footer {
-  background-color: #FD4300;
-}
-
-.bottom{
-  max-height: 100px;
-}
-
-/* .article-source{
-  color: lightgray;
-}
-
-.row1 .article-source{
-  color: lightgray;
-} */
-
-.article-source{
-  font-weight: bold;
-}
-
-.demo {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  padding-top: 2%;
-}
-
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700&display=swap');
-
 :root {
+  --team-dark: #0b2545;
+  --team: #134074;
   --card-radius: 12px;
   --card-shadow: 0 4px 20px rgba(0,0,0,0.08);
-  --card-shadow-hover: 0 8px 30px rgba(0,0,0,0.12);
-  --transition-fast: 0.2s ease;
+  --card-shadow-hover: 0 8px 30px rgba(0,0,0,0.14);
+  --ink: #1f2937;
+  --muted: #6b7280;
 }
+[data-team="eagles"]   { --team-dark: #014A53; --team: #22656E; }
+[data-team="sixers"]   { --team-dark: #006BB8; --team: #3A8AC3; }
+[data-team="phillies"] { --team-dark: #E81828; --team: #EC5E6A; }
+[data-team="flyers"]   { --team-dark: #FD4300; --team: #E6650B; }
 
 body {
   font-family: 'Montserrat', sans-serif;
   -webkit-font-smoothing: antialiased;
+  color: var(--ink);
+  background: #eef1f4 no-repeat center / cover fixed;
 }
+.eagles-body   { background-image: url("phillySportsNewsEagles.png"); }
+.sixers-body   { background-image: url("phillySportsNewsSixers.png"); }
+.phillies-body { background-image: url("phillySportsNewsPhillies.png"); }
+.flyers-body   { background-image: url("phillySportsNewsFlyers.png"); }
 
-h1, h2, h3, h4, h5, h6, p {
-  font-family: 'Raleway', sans-serif;
-}
+h1, h2, h3, h4, p { font-family: 'Raleway', sans-serif; }
+a { color: var(--team-dark); }
 
-.card-advertisement {
+/* Navbar */
+.site-navbar {
+  background-color: var(--team-dark);
   position: sticky;
-  top: 125px;
-  z-index: 9997;
-  color: black !important;
+  top: 0;
+  z-index: 1030;
 }
+.site-navbar .navbar-brand { font-weight: 700; letter-spacing: 0.02em; }
+.site-navbar .nav-link { font-weight: 600; font-size: 1.05rem; color: rgba(255,255,255,0.85) !important; padding: 0.5rem 1rem; }
+.site-navbar .nav-item.active .nav-link,
+.site-navbar .nav-link:hover { color: #fff !important; text-decoration: underline; text-underline-offset: 6px; }
 
-.card-advertisement p{
-  color: black;
-}
+/* Ticker */
+#ticker { background: #fff; border-bottom: 1px solid #ddd; }
+#ticker .carousel-item p { margin: 0; padding: 12px 56px; text-align: center; font-weight: 600; color: var(--ink); }
+.carousel-control-prev-icon, .carousel-control-next-icon { filter: invert(100%); }
 
-/* DraftKings promo cards: clear CTA and consistent look */
-.promo-card .card-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.promo-card h3 {
-  margin-bottom: 0.25rem;
-  font-size: 1.05rem;
-}
-.promo-card p {
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
-  flex-grow: 1;
-}
-.promo-cta {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  font-weight: 600;
-  font-size: 0.95rem;
-  text-align: center;
-  text-decoration: none;
-  border-radius: 8px;
-  transition: opacity 0.2s ease, transform 0.15s ease;
+/* Page shell */
+@media (min-width: 1250px) { .container { max-width: 1320px; } }
+.page {
   background: #fff;
-  color: #014A53;
-  border: 2px solid rgba(255,255,255,0.9);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-}
-.promo-cta:hover {
-  opacity: 0.95;
-  transform: translateY(1px);
-  color: #014A53;
-  text-decoration: none;
-}
-.promo-card.promo-sportsbook .promo-cta {
-  background: #1a365d;
-  color: #fff;
-  border-color: rgba(255,255,255,0.3);
-}
-.promo-card.promo-sportsbook .promo-cta:hover {
-  color: #fff;
-  background: #2c5282;
-}
-
-.card-daily-summary {
-  margin-bottom: 1rem;
-}
-.card-daily-summary h3 {
-  font-size: 1rem;
-  margin-bottom: 0.5rem;
-}
-.card-daily-summary p {
-  font-size: 0.95rem;
-  line-height: 1.5;
-  margin-bottom: 0;
-}
-
-.ad-slot-row { margin-bottom: 1rem; }
-.ad-slot {
-  min-height: 90px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #f3f4f6;
+  margin-top: 24px;
+  margin-bottom: 24px;
+  padding: 24px;
   border-radius: var(--card-radius);
-  border: 1px dashed #d1d5db;
+  box-shadow: var(--card-shadow);
 }
-.ad-slot-leaderboard { min-width: 320px; max-width: 728px; margin: 0 auto; }
-.ad-placeholder { font-size: 0.875rem; color: #9ca3af; }
-.youtube-row .embed-responsive { max-width: 900px; }
+@media (max-width: 768px) { .page { padding: 16px; margin-top: 0; border-radius: 0; } }
+.page-header { margin-bottom: 1rem; }
+.page-header h1, .page h1 { font-size: 1.9rem; font-weight: 700; color: var(--team-dark); }
+.lede { color: var(--muted); font-size: 1.05rem; }
+.eyebrow { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 0.4rem; }
+.muted { color: var(--muted); }
+
+.video-block { border-radius: var(--card-radius); margin-bottom: 1.5rem; }
+
+/* Article cards */
+.article-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 575px) { .article-grid { grid-template-columns: 1fr; } }
+.card { border: 0; border-radius: var(--card-radius); box-shadow: var(--card-shadow); overflow: hidden; transition: box-shadow 0.2s ease; }
+.card:hover { box-shadow: var(--card-shadow-hover); }
+.team-card { background: var(--team); color: #fff; }
+.team-card .card-img-top { aspect-ratio: 16 / 9; object-fit: cover; background: var(--team-dark); }
+.team-card h2 { font-size: 1.08rem; font-weight: 600; line-height: 1.4; }
+.team-card h2 a, .team-card h2 a:hover { color: #fff; }
+.team-card p { color: rgba(255,255,255,0.92); font-size: 0.95rem; line-height: 1.5; margin-bottom: 0.5rem; }
+.team-card .article-source { font-weight: 700; font-size: 0.85rem; margin: 0; }
+.empty-note { color: var(--muted); }
+
+/* Sidebar */
+.sidebar > * { margin-bottom: 20px; }
+@media (min-width: 992px) { .sidebar { position: sticky; top: 72px; align-self: flex-start; } }
+.brief-card { border-top: 6px solid var(--team-dark); }
+.brief-card h2 { font-size: 1.2rem; font-weight: 700; }
+.brief-card h2 a { color: var(--ink); }
+.brief-cta, .promo-cta {
+  display: inline-block; padding: 0.5rem 1rem; font-weight: 600; border-radius: 8px;
+  background: var(--team-dark); color: #fff !important; text-decoration: none !important;
+}
+.brief-cta:hover, .promo-cta:hover { opacity: 0.9; }
+.odds-widget { display: flex; justify-content: center; }
+.promo-card h3 { font-size: 1.05rem; font-weight: 700; }
+.promo-card p { font-size: 0.9rem; }
+.promo-sportsbook .promo-cta { background: #1a365d; }
+.fine-print { font-size: 0.75rem !important; color: var(--muted); margin: 0.75rem 0 0; }
+
+/* Briefs */
+.brief-article h1 { font-size: 2rem; line-height: 1.25; margin-bottom: 1rem; }
+.brief-summary { font-size: 1.15rem; line-height: 1.6; font-weight: 600; border-left: 4px solid var(--team-dark); padding-left: 1rem; }
+.brief-section h2, .brief-reading h2, .other-briefs h2, .prose h2 { font-size: 1.3rem; font-weight: 700; margin-top: 1.75rem; color: var(--team-dark); }
+.brief-section p, .prose p { font-size: 1.05rem; line-height: 1.7; }
+.section-sources { font-size: 0.9rem !important; color: var(--muted); }
+.brief-reading li, .other-briefs li { margin-bottom: 0.4rem; }
+.disclosure { margin-top: 2rem; font-size: 0.9rem; color: var(--muted); border-top: 1px solid #e5e7eb; padding-top: 1rem; }
+.brief-nav { display: flex; justify-content: space-between; gap: 1rem; margin: 1.5rem 0; font-weight: 600; }
+.brief-list { list-style: none; padding: 0; }
+.brief-list li { border-bottom: 1px solid #e5e7eb; padding: 1.25rem 0; }
+.brief-list h2 { font-size: 1.25rem; font-weight: 700; }
+.brief-list h2 a { color: var(--ink); }
+.team-filter a { margin-right: 1rem; font-weight: 600; }
+
+/* Footer */
+.site-footer { background: var(--team-dark); color: #fff; text-align: center; padding: 24px 16px; }
+.site-footer p { color: rgba(255,255,255,0.85); margin: 0.75rem 0 0; font-size: 0.9rem; }
+.footer-links a { color: #fff; margin: 0 0.6rem; display: inline-block; }

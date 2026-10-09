@@ -13,17 +13,13 @@ requests==2.31.0
 google-api-python-client==2.108.0
 feedparser==6.0.11
 python-dotenv==1.0.0
-# X bot + LangChain (tweet_daily.py)
 tweepy>=4.14.0
 xdk>=0.9.0  # Official X SDK, uses api.x.com (Tweepy uses api.twitter.com)
-langchain-openai>=0.2.0
-langchain-core>=0.3.0
 # Optional: selenium>=4.15.0 for USE_SELENIUM=1
 certifi>=2024.0.0
-# Optional: for persisting tweeted_urls on Heroku (set DATABASE_URL)
-psycopg2-binary>=2.9.0
-# Optional: Redis for Flask cache (set REDIS_URL for persistent cache across dyno restarts)
+# Redis (Upstash): page cache, daily briefs, bot state, pageview counts
 redis>=4.0.0
-# Content variety: satire images (OpenAI), standalone/trending (Tavily)
+# Daily briefs and tweet writing (OpenAI), news search (Tavily)
 openai>=1.0.0
 tavily-python>=0.5.0
+tzdata>=2024.1

@@ -1,66 +1,48 @@
-# Deploying to Heroku
+# Deploying (Railway + Upstash)
 
-The app is set up for Heroku: `Procfile` runs gunicorn, and `.env` is gitignored so secrets stay local.
+Production runs on [Railway](https://railway.com) (project `philly-sports-news`) with a free [Upstash](https://upstash.com) Redis database (`philly-sports-news-cache`).
 
-## 1. One-time setup (if new app)
+## Services
 
-```bash
-# Login (if needed)
-heroku login
+| Railway service | What it runs | Schedule (UTC) |
+|---|---|---|
+| `web` | `gunicorn` from the `Procfile`, serves phillysportdaily.com | always on |
+| `daily-briefs` | `python -m jobs.daily_briefs` (writes one brief per team) | `0 11 * * *` (7am ET in summer, 6am in winter) |
+| `tweet-bot` | `python -m twitter_bot.run` (one tweet per run) | `0 3,13,18 * * *` |
 
-# Create app (or use existing)
-heroku create philly-sport-daily
-# Or link existing app:
-# heroku git:remote -a your-app-name
-```
+All three build from this GitHub repo. Cron services start, do their work and exit, so they cost almost nothing.
 
-## 2. Config vars (required)
+## Environment variables
 
-Set these in Heroku Dashboard → Settings → Config Vars (or via CLI):
+| Variable | Services | Notes |
+|---|---|---|
+| `REDIS_URL` | all | Upstash `rediss://` URL. Append `?health_check_interval=30&socket_keepalive=true&retry_on_timeout=true&socket_timeout=10` |
+| `OPENAI_API_KEY` | all | Briefs and tweets |
+| `TAVILY_API_KEY` | all | News search |
+| `API_KEY` | web | YouTube Data API key (optional; no video without it) |
+| `GA_MEASUREMENT_ID` | web | Google Analytics 4 ID, e.g. `G-XXXXXXX` (optional) |
+| `GOOGLE_SITE_VERIFICATION` | web | Search Console HTML-tag verification code (optional) |
+| `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | tweet-bot | X OAuth 1.0a credentials |
+| `BRIEF_MODEL`, `TWEET_MODEL` | optional | Override the OpenAI model (default `gpt-5.4-mini`) |
 
-| Key       | Description |
-|----------|-------------|
-| `API_KEY` | YouTube Data API key (for team page embeds). Optional but recommended. |
+## Redis keys
 
-```bash
-heroku config:set API_KEY=your_youtube_api_key
-```
+Everything the app stores is under the `psd:` prefix (Flask-Caching uses `flask_cache_`):
 
-## 3. Deploy
+- `psd:brief:<team>:<date>`, `psd:briefs:<team>`, `psd:briefs:all`: daily briefs (permanent)
+- `psd:bot:*`: tweeted URLs, last team, posted slots, recent tweet hashes
+- `psd:views:<date>:<path>`: daily pageview counts (bots excluded)
 
-```bash
-git add .
-git commit -m "Deploy philly sports news"
-git push heroku main
-# Or: git push heroku master
-```
+Keep **eviction off** on the Upstash database so briefs are never dropped; page cache entries all expire on their own.
 
-## 4. Custom domain (phillysportdaily.com)
+## Domain
 
-If you still own the domain:
+`www.phillysportdaily.com` is a CNAME to Railway (managed at Squarespace Domains, formerly Google Domains). The bare domain forwards to `www` through Squarespace.
 
-1. **Heroku:** Dashboard → your app → Settings → Domains → Add domain → `phillysportdaily.com` and `www.phillysportdaily.com`.
-2. Heroku will show DNS targets (e.g. `something.herokudns.com`).
-3. **At your domain registrar:** Add CNAME records:
-   - `www` → target Heroku gives for `www.phillysportdaily.com`
-   - For root `phillysportdaily.com`, use Heroku's root domain target (they'll show an A record or ALIAS/CNAME for root).
-4. In Heroku, enable "Automatic TLS" for the custom domain so HTTPS is used.
-
-After DNS propagates (up to 48 hours, often sooner), the site will be live at phillysportdaily.com.
-
-## 5. Optional: Selenium (JS-heavy sites)
-
-If you enable `USE_SELENIUM=1`, add the Chrome buildpack so headless Chrome works:
+## Useful commands
 
 ```bash
-heroku buildpacks:add --index 1 heroku/chrome
-heroku buildpacks:add --index 2 heroku/python
-```
-
-Otherwise the app runs with requests + BeautifulSoup only (no buildpack needed).
-
-## 6. Check logs
-
-```bash
-heroku logs --tail
+railway logs --service web
+railway run --service daily-briefs python -m jobs.daily_briefs   # write today's briefs now
+TWEET_SLOT=article python -m twitter_bot.run --dry-run            # preview a tweet locally
 ```

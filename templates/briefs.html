@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{% if team %}{{ team.name }} Daily Briefs{% else %}Philly Sports Daily Briefs{% endif %} | {{ site_name }}{% endblock %}
+{% block description %}{% if team %}Every {{ team.full_name }} daily brief: what happened and why it matters, with links to the original reporting.{% else %}Original daily briefs on the Eagles, Sixers, Phillies and Flyers: what happened and why it matters, with links to the original reporting.{% endif %}{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <div class="row">
+    <div class="col-lg-8 offset-lg-2">
+      <h1>{% if team %}{{ team.name }} Daily Briefs{% else %}Daily Briefs{% endif %}</h1>
+      <p class="lede">One brief per team, every morning: the stories that matter and why, with links to the original reporting.</p>
+      {% if not team %}
+      <p class="team-filter">{% for slug, t in teams.items() %}<a href="/{{ slug }}/briefs">{{ t.name }}</a>{% endfor %}</p>
+      {% endif %}
+      <ul class="brief-list">
+        {% for b in items %}
+        <li>
+          <p class="eyebrow">{{ teams[b.team].name }} · {{ b.date }}</p>
+          <h2><a href="/{{ b.team }}/brief/{{ b.date }}">{{ b.headline }}</a></h2>
+          <p>{{ b.summary }}</p>
+        </li>
+        {% else %}
+        <li><p>The first briefs are on their way.</p></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</main>
+{% endblock %}

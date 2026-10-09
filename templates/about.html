@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}About | {{ site_name }}{% endblock %}
+{% block description %}{{ site_name }} collects the day's Eagles, Sixers, Phillies and Flyers news in one place and writes an original daily brief for each team.{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <div class="row">
+    <div class="col-lg-8 offset-lg-2 prose">
+      <h1>About {{ site_name }}</h1>
+      <p>{{ site_name }} is a one-stop page for Philadelphia sports fans. Instead of checking a dozen sites, you get the day's Eagles, Sixers, Phillies and Flyers headlines from Philly's best outlets in one place, refreshed every hour.</p>
+
+      <h2>How the news pages work</h2>
+      <p>We pull headlines from team sites and local outlets including NBC Sports Philadelphia, PhillyVoice, Bleeding Green Nation, Liberty Ballers, The Good Phight and Broad Street Hockey, then rank them so the most complete, most relevant stories come first. Every headline links straight to the original publisher.</p>
+
+      <h2>Daily briefs</h2>
+      <p>Each morning we publish a short brief for every team: what happened, why it matters and what to watch next. Briefs are written with the help of AI, working only from the reporting they link to, and every claim is attributed to its source. Past briefs stay up in the <a href="/briefs">archive</a>.</p>
+
+      <h2>Contact</h2>
+      <p>Questions, corrections or ideas? Reach us on X at <a href="https://x.com/{{ x_handle }}" target="_blank" rel="noopener">@{{ x_handle }}</a>.</p>
+    </div>
+  </div>
+</main>
+{% endblock %}

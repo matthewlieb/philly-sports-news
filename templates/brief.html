@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}{{ brief.headline }} | {{ team.name }} Daily Brief {{ brief.date }}{% endblock %}
+{% block description %}{{ brief.summary | truncate(155) }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_title %}{{ brief.headline }}{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{{ {
+  "@context": "https://schema.org",
+  "@type": "NewsArticle",
+  "headline": brief.headline,
+  "description": brief.summary,
+  "datePublished": brief.generated_at,
+  "dateModified": brief.generated_at,
+  "mainEntityOfPage": canonical,
+  "image": site_url ~ "/static/" ~ team.image,
+  "author": {"@type": "Organization", "name": site_name, "url": site_url},
+  "publisher": {"@type": "Organization", "name": site_name, "url": site_url},
+  "about": {"@type": "SportsTeam", "name": team.full_name}
+} | tojson }}
+</script>
+{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <article class="row brief-article">
+    <div class="col-lg-8 offset-lg-2">
+      <p class="eyebrow"><a href="/{{ team.slug }}/briefs">{{ team.name }} Daily Brief</a> · <time datetime="{{ brief.date }}">{{ brief.date }}</time></p>
+      <h1>{{ brief.headline }}</h1>
+      <p class="brief-summary">{{ brief.summary }}</p>
+
+      {% for section in brief.sections %}
+      <section class="brief-section">
+        {% if section.heading %}<h2>{{ section.heading }}</h2>{% endif %}
+        {% for p in section.paragraphs %}<p>{{ p }}</p>{% endfor %}
+        {% if section.sources %}
+        <p class="section-sources">Sources:
+          {% for s in section.sources %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.source }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+        </p>
+        {% endif %}
+      </section>
+      {% endfor %}
+
+      {% if brief.sources %}
+      <section class="brief-reading">
+        <h2>Further reading</h2>
+        <ul>
+          {% for s in brief.sources %}
+          <li><a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.title }}</a> <span class="muted">({{ s.source }})</span></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      <p class="disclosure">{{ site_name }} writes this brief each morning with the help of AI, working only from the reporting linked above. Spot an error? Let us know <a href="https://x.com/{{ x_handle }}" target="_blank" rel="noopener">@{{ x_handle }}</a>.</p>
+
+      <nav class="brief-nav">
+        {% if older %}<a href="/{{ team.slug }}/brief/{{ older }}">&larr; {{ older }}</a>{% else %}<span></span>{% endif %}
+        <a href="{{ team.path }}">Latest {{ team.name }} news</a>
+        {% if newer %}<a href="/{{ team.slug }}/brief/{{ newer }}">{{ newer }} &rarr;</a>{% else %}<span></span>{% endif %}
+      </nav>
+
+      {% if others %}
+      <section class="other-briefs">
+        <h2>Today's other briefs</h2>
+        <ul>
+          {% for slug, b in others %}
+          <li><a href="/{{ slug }}/brief/{{ b.date }}"><strong>{{ teams[slug].name }}:</strong> {{ b.headline }}</a></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+    </div>
+  </article>
+</main>
+{% endblock %}

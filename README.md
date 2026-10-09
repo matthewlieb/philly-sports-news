@@ -2,13 +2,15 @@
 
 # Philly Sports News 🔍
 
-Philly Sports News is a web application that displays the latest news on the Philadelphia Eagles, Sixers, Phillies, and Flyers. The site uses Beautiful Soup 4 to scrape the web for the latest news articles. The YouTube API is used to deliver the latest YouTube videos for each team. The site is designed using custom CSS, and Bootstrap. And Flask is used for the web framework. 
+Philly Sport Daily (https://www.phillysportdaily.com) collects the latest Philadelphia Eagles, Sixers, Phillies, and Flyers news and publishes an original daily brief for each team. The site uses Beautiful Soup 4 and RSS to gather articles. The YouTube API is used to deliver the latest YouTube videos for each team. The site is designed using custom CSS, and Bootstrap. And Flask is used for the web framework. 
 
 ## Features ✨
 
 - Latest headlines for Eagles, Sixers, Phillies, and Flyers news 🚀
 - YouTube videos featuring updates on Philly sports news 🌟
 - Betting odds for latest matches 🎉
+- Daily team briefs with sources, archived at /briefs 📰
+- @sport_philly tweet bot (see twitter_bot/README.md) 🐦
 
 ## Installation 🛠️
 
@@ -18,13 +20,14 @@ To install Philly Sports News, follow these steps:
 2. Navigate to the directory where you cloned the repository: `cd philly-sports-news`
 3. Install the required packages: `pip install -r requirements.txt`
 4. (Optional) Set a YouTube API key for embedded videos: `export API_KEY=your_key`. The app runs without it.
-5. Run the app: `python3 app.py` (or `gunicorn --bind 0.0.0.0:$PORT app:app` for Heroku)
+5. Run the app: `python3 app.py`. Set `REDIS_URL` to use Redis; without it the cache and briefs are in-memory.
+6. Write today's briefs: `python -m jobs.daily_briefs` (needs `OPENAI_API_KEY`)
 
-**Scraping:** Articles are fetched on demand when you open a team page (cached 1 hour). All sources are in `scrapers/source_collectors.py` with fallback selectors. For JS-heavy sites, set `USE_SELENIUM=1` and add Chrome buildpacks on Heroku.
+**Scraping:** Articles are fetched on demand when you open a team page (cached 1 hour). All sources are in `scrapers/source_collectors.py` with fallback selectors. For JS-heavy sites, set `USE_SELENIUM=1`.
 
 ## Usage 🚀
 
-The project is hosted using Heroku and can be found at https://www.phillysportdaily.com. The latest news is displayed for the Eagles by default, but switching pages will provide Sixers news, Phillies news, and Flyers news. A ticker displays headlines at the top of the page. Random YouTube videos are embedded, and a widget shows the latest betting odds.
+The project is hosted on Railway (see [docs/deploy.md](docs/deploy.md)) and can be found at https://www.phillysportdaily.com. The latest news is displayed for the Eagles by default, but switching pages will provide Sixers news, Phillies news, and Flyers news. A ticker displays headlines at the top of the page. Random YouTube videos are embedded, and a widget shows the latest betting odds.
 
 ## Contributing 🤝
 
@@ -56,7 +59,7 @@ The project file structure is as follows:
 ```
 philly-sports-news/
 ├── app.py              # Flask app and routes
-├── Procfile            # Heroku process
+├── Procfile            # Web process (gunicorn)
 ├── README.md
 ├── requirements.txt
 ├── docs/               # Project docs (deploy, ads, twitter bot plan)
@@ -68,15 +71,23 @@ philly-sports-news/
 │   └── images/         # Screenshots, reference images (not served by app)
 ├── lib/                # Shared app logic
 │   ├── config.py       # Environment config (e.g. API_KEY)
-│   ├── rate_limiter.py # YouTube rate-limited requests
+│   ├── teams.py        # Per-team settings, site URLs
+│   ├── articles.py     # Collect + rank articles per team
+│   ├── briefs.py       # Daily brief generation and storage
+│   ├── store.py        # Redis (or in-memory) storage
+│   ├── search.py       # Tavily search
 │   ├── youtube_utils.py
 │   └── article_enhancer.py
+├── jobs/
+│   └── daily_briefs.py # Scheduled: python -m jobs.daily_briefs
 ├── scrapers/           # News fetching
 │   ├── fetcher.py      # HTML fetch (requests + optional Selenium)
 │   ├── rss_scraper.py  # RSS feeds (SB Nation, etc.)
 │   └── source_collectors.py  # Per-team, per-source collectors
 ├── twitter_bot/        # X/Twitter bot (separate module)
 │   ├── run.py          # Entry: python -m twitter_bot.run
+│   ├── tweet_slots.py  # Tweet writers per slot
+│   ├── state.py        # Posted-tweet memory (Redis)
 │   ├── config/voice.py
 │   ├── docs/           # Bot-specific docs (e.g. satire images)
 │   └── assets/images/  # Bot media / reference images

@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{{ team.name }} News Today: Latest {{ team.full_name }} Headlines | {{ site_name }}{% endblock %}
+{% block description %}The latest {{ team.full_name }} news from Philly's best outlets in one place, plus an original daily {{ team.name }} brief. Updated hourly.{% endblock %}
+
+{% block structured_data %}
+<script type="application/ld+json">
+{"@context": "https://schema.org", "@type": "WebSite", "name": {{ site_name | tojson }}, "url": {{ site_url | tojson }}}
+</script>
+{% endblock %}
+
+{% block head_extra %}
+<script>
+  (function (w,d,s,o,f,js,fjs) {
+      w['SBDOddsWidget']=o;w[o] = w[o] || function () { (w[o].q = w[o].q || []).push(arguments) };
+      js = d.createElement(s), fjs = d.getElementsByTagName(s)[0];
+      js.id = o; js.src = f; js.async = 1; fjs.parentNode.insertBefore(js, fjs);
+  }(window, document, 'script', 'sbd_odds', 'https://www.sportsbettingdime.com/app/themes/SportsBettingDime/assets/scripts/sbd-odds-widget.js'));
+  sbd_odds('init', {});
+</script>
+{% endblock %}
+
+{% block content %}
+{% if ticker %}
+<div id="ticker" class="carousel slide" data-ride="carousel">
+  <div class="carousel-inner">
+    {% for a in ticker %}
+    <div class="carousel-item{% if loop.first %} active{% endif %}">
+      <a href="{{ a.url }}" target="_blank" rel="noopener"><p>{{ a.title }}</p></a>
+    </div>
+    {% endfor %}
+  </div>
+  <a class="carousel-control-prev" href="#ticker" role="button" data-slide="prev">
+    <span class="carousel-control-prev-icon" aria-hidden="true"></span><span class="sr-only">Previous</span>
+  </a>
+  <a class="carousel-control-next" href="#ticker" role="button" data-slide="next">
+    <span class="carousel-control-next-icon" aria-hidden="true"></span><span class="sr-only">Next</span>
+  </a>
+</div>
+{% endif %}
+
+<main class="container page">
+  <header class="page-header">
+    <h1>{{ team.full_name }} News</h1>
+    <p class="lede">Today's {{ team.name }} headlines from around Philadelphia, ranked and updated hourly.</p>
+  </header>
+
+  <div class="row main-row">
+    <div class="col-lg-8">
+      {% if embed_code %}
+      <div class="embed-responsive embed-responsive-16by9 video-block">{{ embed_code | safe }}</div>
+      {% endif %}
+
+      <div class="article-grid">
+        {% for a in articles %}
+        <article class="card team-card">
+          <img class="card-img-top" src="{{ a.image or '/static/' ~ team.image }}" alt="" loading="{{ 'eager' if loop.index <= 2 else 'lazy' }}" onerror="this.onerror=null;this.src='/static/{{ team.image }}'">
+          <div class="card-body">
+            <h2><a href="{{ a.url }}" target="_blank" rel="noopener">{{ a.title }}</a></h2>
+            {% if a.description %}<p>{{ a.description | truncate(220) }}</p>{% endif %}
+            <p class="article-source">{{ a.author }}{% if a.author != a.source %} · {{ a.source }}{% endif %}</p>
+          </div>
+        </article>
+        {% else %}
+        <p class="empty-note">Headlines are loading. Check back in a minute.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <aside class="col-lg-4 sidebar">
+      {% if brief %}
+      <section class="card brief-card">
+        <div class="card-body">
+          <p class="eyebrow">{{ team.name }} Daily Brief · {{ brief.date }}</p>
+          <h2><a href="/{{ team.slug }}/brief/{{ brief.date }}">{{ brief.headline }}</a></h2>
+          <p>{{ brief.summary }}</p>
+          <a class="brief-cta" href="/{{ team.slug }}/brief/{{ brief.date }}">Read the full brief</a>
+        </div>
+      </section>
+      {% endif %}
+
+      <script>
+        sbd_odds('display', {"team": "PHI", "league": "{{ team.league }}", "show_concensus": true, "show_predictions": true,
+                             "show_betnow": true, "target": "team-container", "size": "team_300x600"});
+      </script>
+      <div class="odds-widget" id="team-container"></div>
+
+      <section class="card promo-card promo-dfs">
+        <div class="card-body">
+          <h3>Get a $3 DFS contest ticket</h3>
+          <p>Sign up and deposit $5+ to get a $3 DFS Contest Ticket. Use the link below to claim your referral offer.</p>
+          <a class="promo-cta" href="https://myaccount.draftkings.com/auth/signup?referrer=matttttttttttt&wpcid=220267522&wpsrc=DraftKings_Standard_Refer-A-Friend&waffn=matttttttttttt" target="_blank" rel="noopener sponsored">DraftKings Daily Fantasy</a>
+        </div>
+      </section>
+      <section class="card promo-card promo-sportsbook">
+        <div class="card-body">
+          <h3>Get $200 in bonus bets</h3>
+          <p>Sign up, deposit, and bet $5+ to get $200 in Bonus Bets if your bet wins. Use the link below.</p>
+          <a class="promo-cta" href="https://myaccount.draftkings.com/auth/signup?product=sportsbook&referrer=matttttttttttt&wpcid=928318922&wpsrc=Sportsbook+Standard+Refer-A-Friend&waffn=matttttttttttt" target="_blank" rel="noopener sponsored">DraftKings Sportsbook</a>
+          <p class="fine-print">21+. Gambling problem? Call 1-800-GAMBLER.</p>
+        </div>
+      </section>
+    </aside>
+  </div>
+</main>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% if false %}{% block title %}{{ site_name }}{% endblock %}{% block description %}Philadelphia Eagles, Sixers, Phillies and Flyers news in one place, plus an original daily brief for each team.{% endblock %}{% endif %}<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    {% set page_title = self.title() %}
+    {% set page_description = self.description() | trim %}
+    <title>{{ page_title }}</title>
+    <meta name="description" content="{{ page_description }}">
+    {% if canonical %}<link rel="canonical" href="{{ canonical }}">{% endif %}
+    {% if site_verification %}<meta name="google-site-verification" content="{{ site_verification }}">{% endif %}
+
+    <meta property="og:site_name" content="{{ site_name }}">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{{ page_title }}{% endblock %}">
+    <meta property="og:description" content="{{ page_description }}">
+    {% if canonical %}<meta property="og:url" content="{{ canonical }}">{% endif %}
+    <meta property="og:image" content="{{ site_url }}/static/{{ team.image if team else 'phillySportsNewsEagles.png' }}">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:site" content="@{{ x_handle }}">
+
+    <link rel="icon" href="/static/{{ team.image if team else 'phillySportsNewsEagles.png' }}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/css/bootstrap.min.css" integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Raleway:wght@400;600&display=swap" rel="stylesheet">
+    <link href="/static/phillySports.css" rel="stylesheet">
+
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client={{ adsense_client }}" crossorigin="anonymous"></script>
+    {% if ga_id %}
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ ga_id }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '{{ ga_id }}');
+    </script>
+    {% endif %}
+    {% block structured_data %}{% endblock %}
+    {% block head_extra %}{% endblock %}
+  </head>
+
+  <body data-team="{{ team.slug if team else 'site' }}" class="{{ team.slug ~ '-body' if team else 'site-body' }}">
+    <nav class="navbar navbar-expand-lg navbar-dark site-navbar">
+      <a class="navbar-brand" href="/">{{ site_name }}</a>
+      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ml-auto">
+          {% for slug, t in teams.items() %}
+          <li class="nav-item{% if team and team.slug == slug %} active{% endif %}">
+            <a class="nav-link" href="{{ t.path }}">{{ t.name }}</a>
+          </li>
+          {% endfor %}
+          <li class="nav-item{% if request.path.endswith('/briefs') or '/brief/' in request.path %} active{% endif %}">
+            <a class="nav-link" href="/briefs">Daily Briefs</a>
+          </li>
+        </ul>
+      </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <footer class="site-footer">
+      <div class="container">
+        <nav class="footer-links">
+          {% for slug, t in teams.items() %}<a href="{{ t.path }}">{{ t.name }}</a>{% endfor %}
+          <a href="/briefs">Daily Briefs</a>
+          <a href="/about">About</a>
+          <a href="/privacy">Privacy</a>
+          <a href="https://x.com/{{ x_handle }}" target="_blank" rel="noopener">@{{ x_handle }} on X</a>
+        </nav>
+        <p>&copy; {{ year }} {{ site_name }}. Headlines link to their original publishers.</p>
+      </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

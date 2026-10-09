@@ -164,14 +164,10 @@ def get_source_name_from_url(url: str) -> str:
         parsed = urlparse(url)
         domain = parsed.netloc
         
-        # Remove www. prefix
-        if domain.startswith('www.'):
-            domain = domain[4:]
-        
-        # Extract site name (before first dot)
-        site_name = domain.split('.')[0]
-        
-        # Convert to title case and handle common cases
+        # Site name is the registered domain label (sports.yahoo.com -> yahoo)
+        labels = domain.split('.')
+        site_name = labels[-2] if len(labels) >= 2 else labels[0]
+
         source_mapping = {
             'libertyballers': 'Liberty Ballers',
             'bleedinggreennation': 'Bleeding Green Nation',
@@ -179,11 +175,26 @@ def get_source_name_from_url(url: str) -> str:
             'broadstreethockey': 'Broad Street Hockey',
             'philadelphiaeagles': 'Philadelphia Eagles',
             'nbcsports': 'NBC Sports Philadelphia',
+            'nbcsportsphiladelphia': 'NBC Sports Philadelphia',
             'phillyvoice': 'PhillyVoice',
+            'inquirer': 'The Philadelphia Inquirer',
+            'crossingbroad': 'Crossing Broad',
+            'phlsportsnation': 'PHLSportsNation',
             'insidetheiggles': 'Inside the Iggles',
             'thesixersense': 'The Sixer Sense',
             'thatballsouttahere': 'That Balls Outta Here',
             'broadstreetbuzz': 'Broad Street Buzz',
+            'espn': 'ESPN',
+            'cbssports': 'CBS Sports',
+            'foxsports': 'FOX Sports',
+            'yahoo': 'Yahoo Sports',
+            'si': 'Sports Illustrated',
+            'nytimes': 'The Athletic' if '/athletic/' in parsed.path else 'The New York Times',
+            'theathletic': 'The Athletic',
+            'bleacherreport': 'Bleacher Report',
+            'usatoday': 'USA Today',
+            'apnews': 'AP News',
+            'nfl': 'NFL.com',
             'mlb': 'MLB.com',
             'nba': 'NBA.com',
             'nhl': 'NHL.com'

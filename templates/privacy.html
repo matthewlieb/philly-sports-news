@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy | {{ site_name }}{% endblock %}
+{% block description %}How {{ site_name }} uses cookies, advertising and analytics.{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <div class="row">
+    <div class="col-lg-8 offset-lg-2 prose">
+      <h1>Privacy Policy</h1>
+      <p><em>Last updated October 2026</em></p>
+      <p>{{ site_name }} ({{ site_url }}) does not ask you to create an account and does not collect your name, email or other personal details.</p>
+
+      <h2>Advertising</h2>
+      <p>We use Google AdSense to show ads. Third-party vendors, including Google, use cookies to serve ads based on your prior visits to this and other websites. Google's use of advertising cookies enables it and its partners to serve ads based on your visits to this site and/or other sites on the internet.</p>
+      <p>You can opt out of personalized advertising in <a href="https://adssettings.google.com" target="_blank" rel="noopener">Google Ads Settings</a>, or opt out of some third-party vendors' use of cookies at <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener">aboutads.info</a>. Learn more about <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">how Google uses information from sites that use its services</a>.</p>
+
+      <h2>Analytics</h2>
+      <p>We count page views to understand which pages are useful. This count does not identify you. If Google Analytics is enabled, it sets cookies to measure visits in aggregate; you can opt out with the <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">Google Analytics opt-out add-on</a>.</p>
+
+      <h2>Embedded and linked content</h2>
+      <p>Pages include embedded YouTube videos and a sports odds widget, which may set their own cookies under their own privacy policies. Headlines link to other publishers, and some promotional links are affiliate links that may earn us a referral reward.</p>
+
+      <h2>Contact</h2>
+      <p>Questions about this policy? Reach us on X at <a href="https://x.com/{{ x_handle }}" target="_blank" rel="noopener">@{{ x_handle }}</a>.</p>
+    </div>
+  </div>
+</main>
+{% endblock %}

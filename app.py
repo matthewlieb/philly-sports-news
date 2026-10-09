@@ -1,625 +1,197 @@
-# Load .env so API_KEY and other vars are available (e.g. for YouTube embeds)
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-# Fallback: if python-dotenv not installed, load .env manually from project root
-import os as _os
-_env_path = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), ".env")
-if _os.path.isfile(_env_path):
-    with open(_env_path) as _f:
-        for _line in _f:
-            _line = _line.strip()
-            if _line and not _line.startswith("#") and "=" in _line:
-                _k, _, _v = _line.partition("=")
-                _k, _v = _k.strip(), _v.strip().strip("'\"").strip()
-                if _k and _v and _k not in _os.environ:
-                    _os.environ[_k] = _v
-                    if _k == "api_key":
-                        _os.environ["API_KEY"] = _v
-
+import os
 import random
 from datetime import date
-from typing import List, Tuple
-from jinja2 import Template
-from lib.rate_limiter import *
-from lib.youtube_utils import get_embeddable_video_id, create_safe_embed_code
-from flask import Flask
-from flask_caching import Cache
-from utils.article_filter import filter_complete_articles, get_source_name_from_url, merge_and_rank_articles
-import lib.config as config
 
-from scrapers.source_collectors import collect_articles_for_team
-from lib.article_enhancer import enhance_article_data
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from flask import Flask, Response, abort, redirect, render_template, request, url_for  # noqa: E402
+from flask_caching import Cache  # noqa: E402
+
+import lib.config as config  # noqa: E402
+from lib import briefs as brief_store  # noqa: E402
+from lib import store  # noqa: E402
+from lib.article_enhancer import enhance_article_data  # noqa: E402
+from lib.articles import collect_ranked_articles  # noqa: E402
+from lib.teams import SITE_NAME, SITE_URL, TEAM_SLUGS, TEAMS, X_HANDLE, brief_path  # noqa: E402
+from lib.youtube_utils import create_safe_embed_code, get_embeddable_video_id  # noqa: E402
 
 app = Flask(__name__)
 
-# Configure caching: Redis if REDIS_URL set (persists across restarts), else in-memory
-_redis_url = _os.environ.get("REDIS_URL")
-if _redis_url:
-    app.config["CACHE_TYPE"] = "redis"
-    # Heroku Redis (Key-Value Store) uses TLS with a cert that fails verify; disable so connection works
-    _sep = "&" if "?" in _redis_url else "?"
-    app.config["CACHE_REDIS_URL"] = f"{_redis_url}{_sep}ssl_cert_reqs=none"
-else:
-    app.config["CACHE_TYPE"] = "simple"
-app.config["CACHE_DEFAULT_TIMEOUT"] = 3600  # 1 hour default timeout
+_redis_url = os.environ.get("REDIS_URL")
+app.config["CACHE_TYPE"] = "redis" if _redis_url else "simple"
+app.config["CACHE_REDIS_URL"] = _redis_url
+app.config["CACHE_DEFAULT_TIMEOUT"] = 3600
 cache = Cache(app)
 
-def filter_articles_with_images(titles, urls, images, blurbs, authors=None):
-    """
-    Filter articles to only include those with valid images (backward compatibility).
-    Now uses the new quality-based filtering system.
-    """
-    return filter_complete_articles(titles, urls, images, blurbs, authors, min_score=70)
+ADSENSE_CLIENT = "ca-pub-5735663043216445"
+_BOT_MARKERS = ("bot", "crawl", "spider", "slurp", "preview", "monitor", "curl", "python", "headless")
 
 
-def merge_articles_from_sources(article_sources: List[dict]) -> Tuple[List[str], List[str], List[str], List[str], List[str]]:
-    """
-    Merge articles from multiple sources and return only fully populated ones.
-    
-    Args:
-        article_sources: List of dicts with keys: titles, urls, images, blurbs, authors
-        
-    Returns:
-        Merged and filtered (titles, urls, images, blurbs, authors) lists
-    """
-    all_articles = []
-    
-    # Collect all articles from all sources
-    for source in article_sources:
-        titles = source.get('titles', [])
-        urls = source.get('urls', [])
-        images = source.get('images', [])
-        blurbs = source.get('blurbs', [])
-        authors = source.get('authors', [])
-        
-        # Ensure all lists are same length
-        max_len = max(len(titles), len(urls), len(images), len(blurbs))
-        if authors:
-            max_len = max(max_len, len(authors))
-        
-        for i in range(max_len):
-            article = {
-                'title': titles[i] if i < len(titles) else "",
-                'url': urls[i] if i < len(urls) else "",
-                'image': images[i] if i < len(images) else None,
-                'description': blurbs[i] if i < len(blurbs) else "",
-                'author': authors[i] if authors and i < len(authors) else None,
-                'source': get_source_name_from_url(urls[i] if i < len(urls) else "")
-            }
-            all_articles.append(article)
-    
-    # Rank and filter articles by quality
-    ranked_articles = merge_and_rank_articles(all_articles, max_articles=30)
-    
-    # Extract lists
-    filtered_titles = [a['title'] for a in ranked_articles]
-    filtered_urls = [a['url'] for a in ranked_articles]
-    filtered_images = [a['image'] for a in ranked_articles]
-    filtered_blurbs = [a['description'] for a in ranked_articles]
-    
-    # Ensure all authors have "-- " prefix for consistency
-    filtered_authors = []
-    for article in ranked_articles:
-        author = article.get('author') or article.get('source', 'Unknown')
-        # Add "-- " prefix if not already present
-        if author and not author.startswith('-- '):
-            if author == 'Unknown' or author == 'None':
-                filtered_authors.append('-- Unknown')
-            else:
-                filtered_authors.append(f'-- {author}')
-        else:
-            filtered_authors.append(author if author else '-- Unknown')
-    
-    return filtered_titles, filtered_urls, filtered_images, filtered_blurbs, filtered_authors
+@app.context_processor
+def _site_globals():
+    return {
+        "site_name": SITE_NAME,
+        "site_url": SITE_URL,
+        "teams": TEAMS,
+        "x_handle": X_HANDLE,
+        "adsense_client": ADSENSE_CLIENT,
+        "ga_id": os.environ.get("GA_MEASUREMENT_ID"),
+        "site_verification": os.environ.get("GOOGLE_SITE_VERIFICATION"),
+        "year": date.today().year,
+    }
 
 
-def _get_tavily_philly_context(team):
-    """
-    Optional: fetch fresh Philly sports context from Tavily for the 60-second summary.
-    Returns a string of snippets (or empty) when TAVILY_API_KEY is set.
-    team: 'eagles' | 'sixers' | 'phillies' | 'flyers'
-    """
-    api_key = _os.environ.get("TAVILY_API_KEY")
-    if not api_key:
-        return ""
-    team_labels = {"eagles": "Eagles", "sixers": "76ers", "phillies": "Phillies", "flyers": "Flyers"}
-    label = team_labels.get((team or "").lower(), "Philly sports")
-    try:
-        from tavily import TavilyClient
-        client = TavilyClient(api_key=api_key)
-        resp = client.search(
-            f"Philadelphia {label} news today",
-            topic="news",
-            search_depth="basic",
-            max_results=5,
-        )
-        results = resp.get("results") or []
-        if not results:
-            return ""
-        lines = []
-        for r in results[:5]:
-            title = (r.get("title") or "").strip()
-            content = (r.get("content") or "")[:200].strip()
-            if title or content:
-                lines.append(f"- {title}: {content}")
-        return "\n".join(lines) if lines else ""
-    except Exception:
-        return ""
+@app.after_request
+def _count_pageview(response):
+    """Daily per-path view counts in Redis, skipping bots, so traffic is measurable without third parties."""
+    if (request.method == "GET" and response.status_code == 200 and response.mimetype == "text/html"):
+        ua = (request.user_agent.string or "").lower()
+        if ua and not any(m in ua for m in _BOT_MARKERS):
+            try:
+                k = store.key("views", brief_store.local_today(), request.path)
+                r = store.client()
+                r.incr(k)
+                r.expire(k, 400 * 86400)
+            except Exception as e:
+                app.logger.warning("pageview count failed: %s", e)
+    return response
 
 
-def get_daily_summary(team):
-    """
-    AI-generated summary per calendar day, tailored to the team page.
-    Cached 24h by date and team. Returns None if OPENAI_API_KEY missing or API fails.
-    team: 'eagles' | 'sixers' | 'phillies' | 'flyers'
-    """
-    from openai import OpenAI
+@cache.memoize(timeout=3600)
+def get_team_articles(team):
+    articles = collect_ranked_articles(team, max_articles=20)
+    if not articles:
+        return []
+    cols = [[a[k] for a in articles] for k in ("title", "url", "image", "description", "author")]
+    titles, urls, images, blurbs, authors = enhance_article_data(*cols, max_enhance=5, enhance_all=False)
+    for a, t, im, b in zip(articles, titles, images, blurbs):
+        a["title"], a["image"], a["description"] = t, im, b
+    return [a for a in articles if a["title"]]
 
-    team = (team or "eagles").lower()
-    if team not in ("eagles", "sixers", "phillies", "flyers"):
-        team = "eagles"
 
-    cache_key = f"daily_summary_{date.today().isoformat()}_{team}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    api_key = _os.environ.get("OPENAI_API_KEY")
-    if not api_key:
+@cache.memoize(timeout=3600)
+def get_team_video(team):
+    if not config.api_key:
         return None
-
-    all_articles = []
-    for t in ("eagles", "sixers", "phillies", "flyers"):
-        try:
-            sources = collect_articles_for_team(t)
-            for src in sources:
-                titles = src.get("titles", [])
-                urls = src.get("urls", [])
-                images = src.get("images", []) or [None] * len(titles)
-                blurbs = src.get("blurbs", [])
-                authors = src.get("authors", []) or ["Unknown"] * len(titles)
-                n = max(len(titles), len(urls), len(blurbs), len(authors), len(images))
-                for i in range(n):
-                    url = urls[i] if i < len(urls) else ""
-                    if not url or not url.startswith("http"):
-                        continue
-                    all_articles.append({
-                        "title": (titles[i] if i < len(titles) else "").strip(),
-                        "url": url,
-                        "image": images[i] if i < len(images) else None,
-                        "description": (blurbs[i] if i < len(blurbs) else "").strip(),
-                        "author": authors[i] if i < len(authors) else "Unknown",
-                        "source": get_source_name_from_url(url),
-                        "team": t,
-                    })
-        except Exception:
-            continue
-
-    if not all_articles:
-        return None
-
-    ranked = merge_and_rank_articles(all_articles, max_articles=25)
-    # Prioritize current team's headlines so the summary leads with that team
-    team_articles = [a for a in ranked if a.get("team") == team]
-    other_articles = [a for a in ranked if a.get("team") != team]
-    ordered = team_articles[:10] + other_articles[:12]
-    ordered = ordered[:20]
-
-    team_labels = {"eagles": "Eagles", "sixers": "76ers", "phillies": "Phillies", "flyers": "Flyers"}
-    team_label = team_labels[team]
-    headlines_text = "\n".join(f"- [{team_labels.get(a.get('team',''), a.get('team',''))}] {a.get('title', '')}" for a in ordered if a.get("title"))
-
-    # Optional: add Tavily context for fresher, real-time angle (e.g. "today" news)
-    tavily_context = _get_tavily_philly_context(team)
-    today_str = date.today().isoformat()
-    user_content = f"Headlines (team in brackets):\n{headlines_text}"
-    if tavily_context:
-        user_content += f"\n\nAdditional context from web search:\n{tavily_context}"
-
-    try:
-        client = OpenAI(api_key=api_key)
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": f"You write the 'Philly sports in 60 seconds' summary for the {team_label} page. Lead with {team_label} news. Mention other Philly teams only when relevant. Tone: casual fan, 2–3 sentences, no fluff. No generic intros like 'Here's what's happening.' "
-                    f"Today's date is {today_str}. Base the summary ONLY on the headlines and any context below. Do not invent season context: do not say 'gearing up for the season,' 'training camp approaches,' or 'offseason' unless a headline or the context explicitly mentions it. If headlines describe in-season games, injuries, or standings, reflect that; if they mention draft, offseason, or training camp, reflect that.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Write a 2–3 sentence summary for the {team_label} page. Lead with {team_label}. Use only the information below.\n\n{user_content}",
-                },
-            ],
-            max_tokens=150,
-            temperature=0.5,
-        )
-        summary = (resp.choices[0].message.content or "").strip()
-        if not summary:
-            return None
-        cache.set(cache_key, summary, timeout=43200)  # 12 hours so summary stays current
-        return summary
-    except Exception:
-        return None
+    return get_embeddable_video_id(team, config.api_key)
 
 
-@app.route('/health')
-def health():
-    """Lightweight health check; no scraping. Use for Heroku/load balancer."""
-    return 'ok', 200
+def render_team(team):
+    articles = get_team_articles(team)
+    ticker = random.sample(articles[:10], k=min(5, len(articles)))
+    return render_template(
+        "team.html",
+        team=TEAMS[team],
+        articles=articles,
+        ticker=ticker,
+        embed_code=create_safe_embed_code(get_team_video(team), TEAMS[team]["full_name"]),
+        brief=brief_store.latest_brief(team),
+        canonical=SITE_URL + TEAMS[team]["path"],
+    )
 
-def create_dict(titles, urls):
 
-    return {k: v for k, v in zip(titles[:5], urls[:5])}
-
-@cache.cached(timeout=3600, key_prefix='eagles_articles')
-def get_eagles_articles():
-    """
-    Get Eagles articles with caching. Fetches on demand from all sources.
-    Cache expires after 1 hour.
-    """
-    article_sources = collect_articles_for_team("eagles")
-    if not article_sources:
-        return [], [], [], [], []
-    merged = merge_articles_from_sources(article_sources)
-    # Optionally enhance top articles for better images/descriptions
-    titles, urls, images, blurbs, authors = merged
-    if titles and urls:
-        titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
-        )
-    return titles, urls, images, blurbs, authors
-
-@app.route('/')
+@app.route("/")
 def home():
-    # Get cached articles (or fetch if cache miss)
-    merged_titles, merged_urls, merged_images, merged_blurbs, merged_authors = get_eagles_articles()
-    
-    # Distribute across 5 columns
-    num_per_column = 4
-    filtered_titles1 = merged_titles[:num_per_column]
-    filtered_titles2 = merged_titles[num_per_column:num_per_column*2]
-    filtered_titles3 = merged_titles[num_per_column*2:num_per_column*3]
-    filtered_titles4 = merged_titles[num_per_column*3:num_per_column*4]
-    filtered_titles5 = merged_titles[num_per_column*4:num_per_column*5] if len(merged_titles) > num_per_column*4 else []
-    
-    filtered_urls1 = merged_urls[:num_per_column]
-    filtered_urls2 = merged_urls[num_per_column:num_per_column*2]
-    filtered_urls3 = merged_urls[num_per_column*2:num_per_column*3]
-    filtered_urls4 = merged_urls[num_per_column*3:num_per_column*4]
-    filtered_urls5 = merged_urls[num_per_column*4:num_per_column*5] if len(merged_urls) > num_per_column*4 else []
-    
-    filtered_images1 = merged_images[:num_per_column]
-    filtered_images2 = merged_images[num_per_column:num_per_column*2]
-    filtered_images3 = merged_images[num_per_column*2:num_per_column*3]
-    filtered_images4 = merged_images[num_per_column*3:num_per_column*4]
-    filtered_images5 = merged_images[num_per_column*4:num_per_column*5] if len(merged_images) > num_per_column*4 else []
-    
-    filtered_blurbs1 = merged_blurbs[:num_per_column]
-    filtered_blurbs2 = merged_blurbs[num_per_column:num_per_column*2]
-    filtered_blurbs3 = merged_blurbs[num_per_column*2:num_per_column*3]
-    filtered_blurbs4 = merged_blurbs[num_per_column*3:num_per_column*4]
-    filtered_blurbs5 = merged_blurbs[num_per_column*4:num_per_column*5] if len(merged_blurbs) > num_per_column*4 else []
-    
-    filtered_authors1 = merged_authors[:num_per_column]
-    filtered_authors2 = merged_authors[num_per_column:num_per_column*2]
-    filtered_authors3 = merged_authors[num_per_column*2:num_per_column*3]
-    filtered_authors4 = merged_authors[num_per_column*3:num_per_column*4]
-    filtered_authors5 = merged_authors[num_per_column*4:num_per_column*5] if len(merged_authors) > num_per_column*4 else []
+    return render_team("eagles")
 
-    dict1 = create_dict(filtered_titles1, filtered_urls1)
-    dict2 = create_dict(filtered_titles2, filtered_urls2)
-    dict3 = create_dict(filtered_titles3, filtered_urls3)
-    dict4 = create_dict(filtered_titles4, filtered_urls4)
-    dict5 = create_dict(filtered_titles5, filtered_urls5)
 
-    combined_dict = {**dict1, **dict2, **dict3, **dict4, **dict5}
-   
-    # Convert the dictionary to a list of tuples
-    combined_list = list(combined_dict.items())
+@app.route("/eagles")
+def eagles_alias():
+    return redirect("/", code=301)
 
-    # Shuffle the list
-    random.shuffle(combined_list)
 
-    # Create a new dictionary from the shuffled list
-    shuffled_dict = dict(combined_list)
-    keys = list(shuffled_dict.keys())
-    values = list(shuffled_dict.values())
+@app.route("/<team>")
+def team_page(team):
+    if team not in TEAMS or team == "eagles":
+        abort(404)
+    return render_team(team)
 
-    # Get a valid embeddable YouTube video
-    video_id = eagles_request()
-    embed_code = create_safe_embed_code(video_id, 'Philadelphia Eagles')
 
-    daily_summary = get_daily_summary('eagles')
+@app.route("/<team>/brief/<day>")
+def brief_page(team, day):
+    if team not in TEAMS:
+        abort(404)
+    brief = brief_store.get_brief(team, day)
+    if not brief:
+        abort(404)
+    dates = brief_store.brief_dates(team)
+    i = dates.index(day) if day in dates else -1
+    newer = dates[i - 1] if i > 0 else None
+    older = dates[i + 1] if 0 <= i < len(dates) - 1 else None
+    others = [(t, brief_store.get_brief(t, day)) for t in TEAM_SLUGS if t != team]
+    return render_template(
+        "brief.html",
+        team=TEAMS[team],
+        brief=brief,
+        newer=newer,
+        older=older,
+        others=[(t, b) for t, b in others if b],
+        canonical=SITE_URL + brief_path(team, day),
+    )
 
-    # Read the contents of the template file into a string
-    with open('templates/index.html', 'r') as f:
-        template_str = f.read()
 
-    # Create a Template object from the template string
-    template = Template(template_str)
+@app.route("/briefs")
+@app.route("/<team>/briefs")
+def briefs_archive(team=None):
+    if team is not None and team not in TEAMS:
+        abort(404)
+    if team:
+        entries = [(team, d) for d in brief_store.brief_dates(team, limit=60)]
+    else:
+        entries = brief_store.recent_briefs(limit=60)
+    items = [b for b in (brief_store.get_brief(t, d) for t, d in entries) if b]
+    return render_template(
+        "briefs.html",
+        team=TEAMS.get(team),
+        items=items,
+        canonical=SITE_URL + (url_for("briefs_archive", team=team) if team else "/briefs"),
+    )
 
-    # Render the template with the filtered headlines and URLs
-    html = template.render(zip=zip, column1=filtered_titles1, column2=filtered_titles2, column3=filtered_titles3, column4=filtered_titles4, column5=filtered_titles5, urls1=filtered_urls1, urls2=filtered_urls2, urls3=filtered_urls3, urls4=filtered_urls4, urls5=filtered_urls5, imageURLS1=filtered_images1, imageURLS2=filtered_images2, imageURLS3=filtered_images3, imageURLS4=filtered_images4, imageURLS5=filtered_images5, keys=keys, values=values, embed_code=embed_code, blurbs1=filtered_blurbs1, blurbs2=filtered_blurbs2, blurbs3=filtered_blurbs3, blurbs4=filtered_blurbs4, blurbs5=filtered_blurbs5, authors1=filtered_authors1, authors2=filtered_authors2, authors3=filtered_authors3, authors4=filtered_authors4, authors5=filtered_authors5, daily_summary=daily_summary)
 
-    return html
+@app.route("/about")
+def about():
+    return render_template("about.html", canonical=SITE_URL + "/about")
 
-@cache.cached(timeout=3600, key_prefix='sixers_articles')
-def get_sixers_articles():
-    """
-    Get Sixers articles with caching. Fetches on demand from all sources.
-    """
-    article_sources = collect_articles_for_team("sixers")
-    if not article_sources:
-        return [], [], [], [], []
-    merged = merge_articles_from_sources(article_sources)
-    titles, urls, images, blurbs, authors = merged
-    if titles and urls:
-        titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
-        )
-    return titles, urls, images, blurbs, authors
 
-@app.route('/sixers')
-def sixers():
-    # Get cached articles (or fetch if cache miss)
-    merged_titles, merged_urls, merged_images, merged_blurbs, merged_authors = get_sixers_articles()
-    
-    # Take top 20 articles and distribute them across the 5 columns
-    # This ensures we always have fully populated articles, regardless of source
-    num_per_column = 4
-    filtered_titles1a = merged_titles[:num_per_column]
-    filtered_titles2a = merged_titles[num_per_column:num_per_column*2]
-    filtered_titles3a = merged_titles[num_per_column*2:num_per_column*3]
-    filtered_titles4a = merged_titles[num_per_column*3:num_per_column*4]
-    filtered_titles5a = merged_titles[num_per_column*4:num_per_column*5] if len(merged_titles) > num_per_column*4 else []
-    
-    filtered_urls1a = merged_urls[:num_per_column]
-    filtered_urls2a = merged_urls[num_per_column:num_per_column*2]
-    filtered_urls3a = merged_urls[num_per_column*2:num_per_column*3]
-    filtered_urls4a = merged_urls[num_per_column*3:num_per_column*4]
-    filtered_urls5a = merged_urls[num_per_column*4:num_per_column*5] if len(merged_urls) > num_per_column*4 else []
-    
-    filtered_images1a = merged_images[:num_per_column]
-    filtered_images2a = merged_images[num_per_column:num_per_column*2]
-    filtered_images3a = merged_images[num_per_column*2:num_per_column*3]
-    filtered_images4a = merged_images[num_per_column*3:num_per_column*4]
-    filtered_images5a = merged_images[num_per_column*4:num_per_column*5] if len(merged_images) > num_per_column*4 else []
-    
-    filtered_blurbs1a = merged_blurbs[:num_per_column]
-    filtered_blurbs2a = merged_blurbs[num_per_column:num_per_column*2]
-    filtered_blurbs3a = merged_blurbs[num_per_column*2:num_per_column*3]
-    filtered_blurbs4a = merged_blurbs[num_per_column*3:num_per_column*4]
-    filtered_blurbs5a = merged_blurbs[num_per_column*4:num_per_column*5] if len(merged_blurbs) > num_per_column*4 else []
-    
-    filtered_authors1a = merged_authors[:num_per_column]
-    filtered_authors2a = merged_authors[num_per_column:num_per_column*2]
-    filtered_authors3a = merged_authors[num_per_column*2:num_per_column*3]
-    filtered_authors4a = merged_authors[num_per_column*3:num_per_column*4]
-    filtered_authors5a = merged_authors[num_per_column*4:num_per_column*5] if len(merged_authors) > num_per_column*4 else []
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html", canonical=SITE_URL + "/privacy")
 
-    dict1 = create_dict(filtered_titles1a, filtered_urls1a)
-    dict2 = create_dict(filtered_titles2a, filtered_urls2a)
-    dict3 = create_dict(filtered_titles3a, filtered_urls3a)
-    dict4 = create_dict(filtered_titles4a, filtered_urls4a)
-    dict5 = create_dict(filtered_titles5a, filtered_urls5a)
 
-    combined_dict = {**dict1, **dict2, **dict3, **dict4, **dict5}
-   
-    # Convert the dictionary to a list of tuples
-    combined_list = list(combined_dict.items())
+@app.route("/robots.txt")
+def robots():
+    body = f"User-agent: *\nAllow: /\nDisallow: /health\n\nSitemap: {SITE_URL}/sitemap.xml\n"
+    return Response(body, mimetype="text/plain")
 
-    # Shuffle the list
-    random.shuffle(combined_list)
 
-    # Create a new dictionary from the shuffled list
-    shuffled_dict = dict(combined_list)
-    keys1 = list(shuffled_dict.keys())
-    values1 = list(shuffled_dict.values())
+@app.route("/ads.txt")
+def ads_txt():
+    pub = ADSENSE_CLIENT.removeprefix("ca-")
+    return Response(f"google.com, {pub}, DIRECT, f08c47fec0942fa0\n", mimetype="text/plain")
 
-    video_id = None
-    if config.api_key:
-        video_id = get_embeddable_video_id('sixers', config.api_key)
-    embed_code1 = create_safe_embed_code(video_id, 'Philadelphia 76ers')
 
-    # Read the contents of the template file into a string
-    with open('templates/index2a.html', 'r') as f:
-        template_str = f.read()
+@app.route("/sitemap.xml")
+def sitemap():
+    today = brief_store.local_today()
+    urls = [(SITE_URL + TEAMS[t]["path"], today, "hourly") for t in TEAM_SLUGS]
+    urls += [(SITE_URL + "/briefs", today, "daily")]
+    urls += [(SITE_URL + f"/{t}/briefs", today, "daily") for t in TEAM_SLUGS]
+    urls += [(SITE_URL + brief_path(t, d), d, "never") for t, d in brief_store.recent_briefs(limit=2000)]
+    urls += [(SITE_URL + "/about", None, "yearly"), (SITE_URL + "/privacy", None, "yearly")]
+    return Response(render_template("sitemap.xml", urls=urls), mimetype="application/xml")
 
-    # Create a Template object from the template string
-    template = Template(template_str)
 
-    daily_summary = get_daily_summary('sixers')
+@app.route("/health")
+def health():
+    return "ok", 200
 
-    # Render the template with the filtered headlines and URLs
-    # Note: Source names are now dynamic based on article URLs
-    html2 = template.render(zip1=zip, column1a=filtered_titles1a, column2a=filtered_titles2a, column3a=filtered_titles3a, column4a=filtered_titles4a, column5a=filtered_titles5a, urls1a=filtered_urls1a, urls2a=filtered_urls2a, urls3a=filtered_urls3a, urls4a=filtered_urls4a, urls5a=filtered_urls5a, imageURLS1a=filtered_images1a, imageURLS2a=filtered_images2a, imageURLS3a=filtered_images3a, imageURLS4a=filtered_images4a, imageURLS5a=filtered_images5a, keys1=keys1, values1=values1, embed_code1=embed_code1, blurbs1a=filtered_blurbs1a, blurbs2a=filtered_blurbs2a, blurbs3a=filtered_blurbs3a, blurbs4a=filtered_blurbs4a, blurbs5a=filtered_blurbs5a, authors1a=filtered_authors1a, authors2a=filtered_authors2a, authors3a=filtered_authors3a, authors4a=filtered_authors4a, authors5a=filtered_authors5a, daily_summary=daily_summary)
 
-    return html2
+@app.errorhandler(404)
+def not_found(_e):
+    return render_template("404.html"), 404
 
-@cache.cached(timeout=3600, key_prefix='phillies_articles')
-def get_phillies_articles():
-    """
-    Get Phillies articles with caching. Fetches on demand from all sources.
-    """
-    article_sources = collect_articles_for_team("phillies")
-    if not article_sources:
-        return [], [], [], [], []
-    merged = merge_articles_from_sources(article_sources)
-    titles, urls, images, blurbs, authors = merged
-    if titles and urls:
-        titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
-        )
-    return titles, urls, images, blurbs, authors
 
-@app.route('/phillies')
-def phillies():
-    # Get cached articles (or fetch if cache miss)
-    merged_titles, merged_urls, merged_images, merged_blurbs, merged_authors = get_phillies_articles()
-    
-    # Distribute across 5 columns
-    num_per_column = 4
-    filtered_titles1b = merged_titles[:num_per_column]
-    filtered_titles2b = merged_titles[num_per_column:num_per_column*2]
-    filtered_titles3b = merged_titles[num_per_column*2:num_per_column*3]
-    filtered_titles4b = merged_titles[num_per_column*3:num_per_column*4]
-    filtered_titles5b = merged_titles[num_per_column*4:num_per_column*5] if len(merged_titles) > num_per_column*4 else []
-    
-    filtered_urls1b = merged_urls[:num_per_column]
-    filtered_urls2b = merged_urls[num_per_column:num_per_column*2]
-    filtered_urls3b = merged_urls[num_per_column*2:num_per_column*3]
-    filtered_urls4b = merged_urls[num_per_column*3:num_per_column*4]
-    filtered_urls5b = merged_urls[num_per_column*4:num_per_column*5] if len(merged_urls) > num_per_column*4 else []
-    
-    filtered_images1b = merged_images[:num_per_column]
-    filtered_images2b = merged_images[num_per_column:num_per_column*2]
-    filtered_images3b = merged_images[num_per_column*2:num_per_column*3]
-    filtered_images4b = merged_images[num_per_column*3:num_per_column*4]
-    filtered_images5b = merged_images[num_per_column*4:num_per_column*5] if len(merged_images) > num_per_column*4 else []
-    
-    filtered_blurbs1b = merged_blurbs[:num_per_column]
-    filtered_blurbs2b = merged_blurbs[num_per_column:num_per_column*2]
-    filtered_blurbs3b = merged_blurbs[num_per_column*2:num_per_column*3]
-    filtered_blurbs4b = merged_blurbs[num_per_column*3:num_per_column*4]
-    filtered_blurbs5b = merged_blurbs[num_per_column*4:num_per_column*5] if len(merged_blurbs) > num_per_column*4 else []
-    
-    filtered_authors1b = merged_authors[:num_per_column]
-    filtered_authors2b = merged_authors[num_per_column:num_per_column*2]
-    filtered_authors3b = merged_authors[num_per_column*2:num_per_column*3]
-    filtered_authors4b = merged_authors[num_per_column*3:num_per_column*4]
-    filtered_authors5b = merged_authors[num_per_column*4:num_per_column*5] if len(merged_authors) > num_per_column*4 else []
-
-    dict1 = create_dict(filtered_titles1b, filtered_urls1b)
-    dict2 = create_dict(filtered_titles2b, filtered_urls2b)
-    dict3 = create_dict(filtered_titles3b, filtered_urls3b)
-    dict4 = create_dict(filtered_titles4b, filtered_urls4b)
-    dict5 = create_dict(filtered_titles5b, filtered_urls5b)
-
-    combined_dict = {**dict1, **dict2, **dict3, **dict4, **dict5}
-
-    # Convert the dictionary to a list of tuples
-    combined_list = list(combined_dict.items())
-
-    # Shuffle the list
-    random.shuffle(combined_list)
-
-    shuffled_dict = dict(combined_list)
-    keys2 = list(shuffled_dict.keys())
-    values2 = list(shuffled_dict.values())
-
-    video_id = phillies_request()
-    
-    # Use the safe embed code function to handle None or invalid videos
-    embed_code2 = create_safe_embed_code(video_id, 'Philadelphia Phillies')
-
-    # Read the contents of the template file into a string
-    with open('templates/index3a.html', 'r') as f:
-        template_str = f.read()
-
-    # Create a Template object from the template string
-    template = Template(template_str)
-
-    daily_summary = get_daily_summary('phillies')
-
-    # Render the template with the headlines and URLs
-    html3 = template.render(zip2=zip, column1b=filtered_titles1b, column2b=filtered_titles2b, column3b=filtered_titles3b, column4b=filtered_titles4b, column5b=filtered_titles5b, urls1b=filtered_urls1b, urls2b=filtered_urls2b, urls3b=filtered_urls3b, urls4b=filtered_urls4b, urls5b=filtered_urls5b, imageURLS1b=filtered_images1b,imageURLS2b=filtered_images2b, imageURLS3b=filtered_images3b, imageURLS4b=filtered_images4b, imageURLS5b=filtered_images5b, keys2=keys2, values2=values2, embed_code2=embed_code2, blurbs1b=filtered_blurbs1b, blurbs2b=filtered_blurbs2b, blurbs3b=filtered_blurbs3b, blurbs4b=filtered_blurbs4b, blurbs5b=filtered_blurbs5b, authors1b=filtered_authors1b, authors2b=filtered_authors2b, authors3b=filtered_authors3b, authors4b=filtered_authors4b, authors5b=filtered_authors5b, daily_summary=daily_summary)
-
-    return html3
-
-@cache.cached(timeout=3600, key_prefix='flyers_articles')
-def get_flyers_articles():
-    """
-    Get Flyers articles with caching. Fetches on demand from all sources.
-    """
-    article_sources = collect_articles_for_team("flyers")
-    if not article_sources:
-        return [], [], [], [], []
-    merged = merge_articles_from_sources(article_sources)
-    titles, urls, images, blurbs, authors = merged
-    if titles and urls:
-        titles, urls, images, blurbs, authors = enhance_article_data(
-            titles, urls, images, blurbs, authors, max_enhance=5, enhance_all=False
-        )
-    return titles, urls, images, blurbs, authors
-
-@app.route('/flyers')
-def flyers():
-    # Get cached articles (or fetch if cache miss)
-    merged_titles, merged_urls, merged_images, merged_blurbs, merged_authors = get_flyers_articles()
-    
-    # Distribute across 5 columns
-    num_per_column = 4
-    filtered_titles1c = merged_titles[:num_per_column]
-    filtered_titles2c = merged_titles[num_per_column:num_per_column*2]
-    filtered_titles3c = merged_titles[num_per_column*2:num_per_column*3]
-    filtered_titles4c = merged_titles[num_per_column*3:num_per_column*4]
-    filtered_titles5c = merged_titles[num_per_column*4:num_per_column*5] if len(merged_titles) > num_per_column*4 else []
-    
-    filtered_urls1c = merged_urls[:num_per_column]
-    filtered_urls2c = merged_urls[num_per_column:num_per_column*2]
-    filtered_urls3c = merged_urls[num_per_column*2:num_per_column*3]
-    filtered_urls4c = merged_urls[num_per_column*3:num_per_column*4]
-    filtered_urls5c = merged_urls[num_per_column*4:num_per_column*5] if len(merged_urls) > num_per_column*4 else []
-    
-    filtered_images1c = merged_images[:num_per_column]
-    filtered_images2c = merged_images[num_per_column:num_per_column*2]
-    filtered_images3c = merged_images[num_per_column*2:num_per_column*3]
-    filtered_images4c = merged_images[num_per_column*3:num_per_column*4]
-    filtered_images5c = merged_images[num_per_column*4:num_per_column*5] if len(merged_images) > num_per_column*4 else []
-    
-    filtered_blurbs1c = merged_blurbs[:num_per_column]
-    filtered_blurbs2c = merged_blurbs[num_per_column:num_per_column*2]
-    filtered_blurbs3c = merged_blurbs[num_per_column*2:num_per_column*3]
-    filtered_blurbs4c = merged_blurbs[num_per_column*3:num_per_column*4]
-    filtered_blurbs5c = merged_blurbs[num_per_column*4:num_per_column*5] if len(merged_blurbs) > num_per_column*4 else []
-    
-    filtered_authors1c = merged_authors[:num_per_column]
-    filtered_authors2c = merged_authors[num_per_column:num_per_column*2]
-    filtered_authors3c = merged_authors[num_per_column*2:num_per_column*3]
-    filtered_authors4c = merged_authors[num_per_column*3:num_per_column*4]
-    filtered_authors5c = merged_authors[num_per_column*4:num_per_column*5] if len(merged_authors) > num_per_column*4 else []
-
-    dict1 = create_dict(filtered_titles1c, filtered_urls1c)
-    dict2 = create_dict(filtered_titles2c, filtered_urls2c)
-    dict3 = create_dict(filtered_titles3c, filtered_urls3c)
-    dict4 = create_dict(filtered_titles4c, filtered_urls4c)
-    dict5 = create_dict(filtered_titles5c, filtered_urls5c)
-
-    combined_dict = {**dict1, **dict2, **dict3, **dict4, **dict5}
-
-    # Convert the dictionary to a list of tuples
-    combined_list = list(combined_dict.items())
-
-    # Shuffle the list
-    random.shuffle(combined_list)
-
-    shuffled_dict = dict(combined_list)
-    keys3 = list(shuffled_dict.keys())
-    values3 = list(shuffled_dict.values())
-
-    video_id = flyers_request()
-    
-    # Use the safe embed code function to handle None or invalid videos
-    embed_code3 = create_safe_embed_code(video_id, 'Philadelphia Flyers')
-
-    # Read the contents of the template file into a string
-    with open('templates/index4a.html', 'r') as f:
-        template_str = f.read()
-
-    # Create a Template object from the template string
-    template = Template(template_str)
-
-    daily_summary = get_daily_summary('flyers')
-
-    # Render the template with the headlines and URLs
-    html4 = template.render(zip3=zip, column1c=filtered_titles1c, column2c=filtered_titles2c, column3c=filtered_titles3c, column4c=filtered_titles4c, column5c=filtered_titles5c, urls1c=filtered_urls1c, urls2c=filtered_urls2c, urls3c=filtered_urls3c, urls4c=filtered_urls4c, urls5c=filtered_urls5c, imageURLS1c=filtered_images1c,imageURLS2c=filtered_images2c, imageURLS3c=filtered_images3c, imageURLS4c=filtered_images4c, imageURLS5c=filtered_images5c, keys3=keys3, values3=values3, embed_code3=embed_code3, blurbs1c=filtered_blurbs1c, blurbs2c=filtered_blurbs2c, blurbs3c=filtered_blurbs3c, blurbs4c=filtered_blurbs4c, blurbs5c=filtered_blurbs5c, authors1c=filtered_authors1c, authors2c=filtered_authors2c, authors3c=filtered_authors3c, authors4c=filtered_authors4c, authors5c=filtered_authors5c, daily_summary=daily_summary)
-
-    return html4
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run()
