@@ -81,9 +81,5 @@ docs/_build/
 flask_output.log
 /tmp/flask_output.log
 
-# Twitter bot: ignore data dir except files the workflow commits
+# Twitter bot: old local state files (state now lives in Redis)
 twitter_bot/data/
-!twitter_bot/data/tweeted_urls.txt
-!twitter_bot/data/last_tweeted_team.txt
-!twitter_bot/data/last_slot_date.txt
-!twitter_bot/data/tweet_hashes.txt
