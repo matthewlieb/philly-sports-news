@@ -156,7 +156,7 @@ def upload_instagram_carousel(images: list[Path], caption: str) -> dict:
     return {"id": published["id"], "url": link}
 
 
-def upload_facebook_reel(video: Path, description: str) -> dict:
+def upload_facebook_reel(video: Path, description: str, state: str = "PUBLISHED") -> dict:
     """Facebook Page Reel. FB_PAGE_ID + FB_PAGE_TOKEN (a Page token from a long-lived user token doesn't expire)."""
     page, token = os.environ["FB_PAGE_ID"], os.environ["FB_PAGE_TOKEN"]
     graph = f"https://graph.facebook.com/{os.environ.get('FB_API_VERSION', 'v23.0')}"
@@ -171,7 +171,7 @@ def upload_facebook_reel(video: Path, description: str) -> dict:
         if not up.get("success"):
             raise RuntimeError(f"Facebook reel upload failed: {up}")
         done = requests.post(f"{graph}/{page}/video_reels", timeout=60, params={
-            "upload_phase": "finish", "video_id": start["video_id"], "video_state": "PUBLISHED",
+            "upload_phase": "finish", "video_id": start["video_id"], "video_state": state,
             "description": description[:5000], "access_token": token}).json()
         if not done.get("success"):
             raise RuntimeError(f"Facebook reel publish failed: {done}")
