@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 from lib import store
 from lib.articles import collect_ranked_articles
 from lib.espn import facts_text, team_snapshot
+from lib.factcheck import check
 from lib.published import parse_date, published_many
 from lib.search import tavily_search
 from lib.teams import TEAMS, TEAM_SLUGS
@@ -188,6 +189,18 @@ def generate_brief(team: str, day: str | None = None, postgame: bool = False) ->
     if not headline or not summary or not sections:
         print(f"{team}: model returned an incomplete brief, skipping")
         return None
+
+    paragraphs = [(si, pi) for si, sec in enumerate(sections) for pi in range(len(sec["paragraphs"]))]
+    items = [headline, summary] + [sections[si]["paragraphs"][pi] for si, pi in paragraphs]
+    fixes = check(items, f"{context}\n\nSources:\n\n{numbered}")
+    headline = fixes.get(0) or headline
+    summary = fixes.get(1) or summary
+    for k, (si, pi) in enumerate(paragraphs, 2):
+        if k in fixes:
+            sections[si]["paragraphs"][pi] = fixes[k]
+    for sec in sections:
+        sec["paragraphs"] = [p for p in sec["paragraphs"] if p]
+    sections = [sec for sec in sections if sec["paragraphs"]]
 
     return {
         "team": team,

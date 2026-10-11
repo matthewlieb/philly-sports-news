@@ -5,6 +5,7 @@ import os
 from openai import OpenAI
 
 from lib.espn import facts_text
+from lib.factcheck import check
 from lib.teams import TEAMS
 
 _SYSTEM = """You write the daily {team} short-form video (YouTube Shorts / Instagram Reels) for a {name} fan account.
@@ -99,4 +100,27 @@ def write_script(team: str, brief: dict, snapshot: dict, postgame: bool = False,
             b["card"]["detail"] = str(card.get("detail") or "").strip()[:48]
     script["beats"] = beats
     script["hook_text"] = _clean(script.get("hook_text") or beats[0]["say"]).rstrip(",")
+    return _fact_checked(script, f"{_brief_block(brief)}\n\n{facts_text(snapshot)}")
+
+
+def _fact_checked(script: dict, evidence: str) -> dict:
+    """Fix spoken lines that aren't supported; drop unsupported cards; fall back on hook/title."""
+    beats = script["beats"]
+    cards = [(i, b["card"]) for i, b in enumerate(beats) if b.get("card")]
+    items = ([b["say"] for b in beats]
+             + [f"On-screen card: {c['label']} {c['value']} {c['detail']}".strip() for _, c in cards]
+             + [f"On-screen title: {script['hook_text']}", f"Video title: {script.get('title', '')}"])
+    fixes = check(items, evidence)
+    for i, b in enumerate(beats):
+        if i in fixes:
+            b["say"] = _clean(fixes[i])
+    for k, (i, _) in enumerate(cards, len(beats)):
+        if k in fixes:
+            beats[i]["card"] = None
+    hook_k, title_k = len(beats) + len(cards), len(beats) + len(cards) + 1
+    script["beats"] = [b for b in beats if b["say"]]
+    if hook_k in fixes:
+        script["hook_text"] = _clean(fixes[hook_k].removeprefix("On-screen title:")) or script["beats"][0]["say"]
+    if title_k in fixes and fixes[title_k]:
+        script["title"] = fixes[title_k].removeprefix("Video title:").strip()
     return script
