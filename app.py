@@ -50,14 +50,35 @@ def _count_pageview(response):
     if (request.method == "GET" and response.status_code == 200 and response.mimetype == "text/html"):
         ua = (request.user_agent.string or "").lower()
         if ua and not any(m in ua for m in _BOT_MARKERS):
-            try:
-                k = store.key("views", brief_store.local_today(), request.path)
-                r = store.client()
-                r.incr(k)
-                r.expire(k, 400 * 86400)
-            except Exception as e:
-                app.logger.warning("pageview count failed: %s", e)
+            threading.Thread(target=_record_view, args=(request.path,), daemon=True).start()
     return response
+
+
+def _record_view(path: str) -> None:
+    try:
+        k = store.key("views", brief_store.local_today(), path)
+        r = store.client()
+        if hasattr(r, "pipeline"):
+            r.pipeline().incr(k).expire(k, 400 * 86400).execute()
+        else:
+            r.incr(k)
+            r.expire(k, 400 * 86400)
+    except Exception as e:
+        app.logger.warning("pageview count failed: %s", e)
+
+
+_local: dict[str, tuple[float, object]] = {}
+
+
+def _memo(name: str, fn, ttl: int = 60):
+    """Keep a value in this process for ttl seconds. Redis is a cross-country round trip (~100ms) away,
+    and page data only changes a few times an hour."""
+    hit = _local.get(name)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    value = fn()
+    _local[name] = (time.time(), value)
+    return value
 
 
 _refreshing: set[str] = set()
@@ -108,13 +129,14 @@ def _build_team_articles(team):
 
 
 def get_team_articles(team):
-    return _stale_while_revalidate(f"articles:{team}", lambda: _build_team_articles(team))
+    return _memo(f"articles:{team}", lambda: _stale_while_revalidate(f"articles:{team}", lambda: _build_team_articles(team)))
 
 
 def get_team_video(team):
     if not config.api_key:
         return None
-    return _stale_while_revalidate(f"video:{team}", lambda: get_embeddable_video_id(team, config.api_key))
+    return _memo(f"video:{team}", lambda: _stale_while_revalidate(
+        f"video:{team}", lambda: get_embeddable_video_id(team, config.api_key)))
 
 
 def render_team(team):
@@ -126,7 +148,7 @@ def render_team(team):
         articles=articles,
         ticker=ticker,
         embed_code=create_safe_embed_code(get_team_video(team), TEAMS[team]["full_name"]),
-        brief=brief_store.latest_brief(team),
+        brief=_memo(f"latest_brief:{team}", lambda: brief_store.latest_brief(team)),
         canonical=SITE_URL + TEAMS[team]["path"],
     )
 
@@ -152,21 +174,21 @@ def team_page(team):
 def brief_page(team, day):
     if team not in TEAMS:
         abort(404)
-    brief = brief_store.get_brief(team, day)
+    others = [t for t in TEAM_SLUGS if t != team]
+    brief, *other_briefs = brief_store.get_briefs([(team, day)] + [(t, day) for t in others])
     if not brief:
         abort(404)
-    dates = brief_store.brief_dates(team)
+    dates = _memo(f"brief_dates:{team}", lambda: brief_store.brief_dates(team))
     i = dates.index(day) if day in dates else -1
     newer = dates[i - 1] if i > 0 else None
     older = dates[i + 1] if 0 <= i < len(dates) - 1 else None
-    others = [(t, brief_store.get_brief(t, day)) for t in TEAM_SLUGS if t != team]
     return render_template(
         "brief.html",
         team=TEAMS[team],
         brief=brief,
         newer=newer,
         older=older,
-        others=[(t, b) for t, b in others if b],
+        others=[(t, b) for t, b in zip(others, other_briefs) if b],
         canonical=SITE_URL + brief_path(team, day),
     )
 
@@ -176,11 +198,13 @@ def brief_page(team, day):
 def briefs_archive(team=None):
     if team is not None and team not in TEAMS:
         abort(404)
-    if team:
-        entries = [(team, d) for d in brief_store.brief_dates(team, limit=60)]
-    else:
-        entries = brief_store.recent_briefs(limit=60)
-    items = [b for b in (brief_store.get_brief(t, d) for t, d in entries) if b]
+    def load():
+        if team:
+            entries = [(team, d) for d in brief_store.brief_dates(team, limit=60)]
+        else:
+            entries = brief_store.recent_briefs(limit=60)
+        return [b for b in brief_store.get_briefs(entries) if b]
+    items = _memo(f"archive:{team}", load)
     return render_template(
         "briefs.html",
         team=TEAMS.get(team),

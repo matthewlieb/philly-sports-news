@@ -47,6 +47,14 @@ def get_brief(team: str, day: str) -> dict | None:
     return json.loads(raw) if raw else None
 
 
+def get_briefs(pairs: list[tuple[str, str]]) -> list[dict | None]:
+    """Several briefs in one Redis round trip, in the order given."""
+    if not pairs:
+        return []
+    raws = store.client().mget([store.key("brief", t, d) for t, d in pairs])
+    return [json.loads(raw) if raw else None for raw in raws]
+
+
 def brief_dates(team: str, limit: int = -1) -> list[str]:
     """Dates with a brief for this team, newest first."""
     end = -1 if limit < 0 else limit - 1

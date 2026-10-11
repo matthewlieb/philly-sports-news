@@ -33,6 +33,9 @@ class _MemoryStore:
         self._expires[key] = time.time() + ex if ex else None
         return True
 
+    def mget(self, keys):
+        return [self.get(k) for k in keys]
+
     def exists(self, key):
         return 1 if self._alive(key) else 0
 
