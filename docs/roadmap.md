@@ -17,6 +17,10 @@ Status as of October 11, 2026 (evening).
 - Postgame videos: hourly run makes a result-first video 4.5-20h after kickoff and refreshes that day's brief.
 - Name pronunciations for TTS (`lib/pronunciation.py`).
 - **Public posting starts Oct 12** (`SHORTS_PRIVACY=public`): YouTube + Instagram Reels.
+- Instagram carousels: postgame recap after each game, weekly "5 things" every Tuesday at noon ET.
+- Comment assistant (`agents/`, Railway `page-agents`, every 30 min) in review mode; approve drafts at
+  `/admin/comments?key=<ADMIN_KEY>` (key in local `.env`). Set `COMMENT_MODE=auto` to let it post on its own.
+- Facebook Reels and Threads publishing built; switch on when credentials are added.
 
 ## Waiting on Matthew
 
@@ -27,9 +31,12 @@ Status as of October 11, 2026 (evening).
 
 ## Next to build
 
+- **Facebook + Threads credentials** (Matthew): Facebook Page + Page token, Threads tester + token.
+- **Daily email**: pick a provider (Buttondown free to 100 subscribers; beehiiv free to 2,500 but its send API is paid),
+  add a signup box on the site, and send each morning's briefs automatically.
+
 1. **Cross-posting** to Facebook Reels and Threads (free APIs, same video and caption).
 3. **Page-management agents** (only actions the platforms allow):
-   - Comment assistant: reply to genuine questions on our own posts, hide spam. Starts in draft/review mode.
    - Weekly growth analyst: pull YouTube Analytics and Instagram Insights (retention, views, follows per video),
      write a short report, and feed what works (hook styles, topics, length) back into the script prompt.
      Needs about two weeks of posted videos first.
