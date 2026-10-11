@@ -1,6 +1,6 @@
 # Roadmap
 
-Status as of October 11, 2026.
+Status as of October 11, 2026 (evening).
 
 ## Done
 
@@ -12,19 +12,22 @@ Status as of October 11, 2026.
 - Accounts connected: YouTube "Eagles Daily | Philly Sport Daily" and Instagram @eaglesdaily.psd. Videos upload to
   YouTube as **private** for review; Instagram starts when `SHORTS_PRIVACY=public`.
 - Search Console verified and sitemap submitted.
+- Freshness: sources carry publish dates (newest first, >4 days dropped), ESPN box scores feed briefs, recent leads aren't repeated.
+- Accuracy: a fact-check pass (gpt-5.4) checks every brief sentence and video line/card/title against the evidence.
+- Postgame videos: hourly run makes a result-first video 4.5-20h after kickoff and refreshes that day's brief.
+- Name pronunciations for TTS (`lib/pronunciation.py`).
+- **Public posting starts Oct 12** (`SHORTS_PRIVACY=public`): YouTube + Instagram Reels.
 
 ## Waiting on Matthew
 
-1. **Review the private uploads** on YouTube Studio, then say when to go public.
+1. **Watch the first public posts** and flag anything off.
 2. **Confirm** the Google Cloud OAuth consent screen (project instabot-455700) is "In production".
 3. **AdSense**: request a new review around late October, once a few weeks of briefs are indexed.
 4. **X**: decide later whether to buy API credits (~$1.35-12.50/month depending on links).
 
 ## Next to build
 
-1. **Go live with shorts**: after review, set `SHORTS_PRIVACY=public` on `eagles-shorts` (Instagram starts too).
-   Add a per-team pronunciation dictionary (respell names for the voice only; captions keep real spelling).
-2. **Cross-posting** to Facebook Reels and Threads (free APIs, same video and caption).
+1. **Cross-posting** to Facebook Reels and Threads (free APIs, same video and caption).
 3. **Page-management agents** (only actions the platforms allow):
    - Comment assistant: reply to genuine questions on our own posts, hide spam. Starts in draft/review mode.
    - Weekly growth analyst: pull YouTube Analytics and Instagram Insights (retention, views, follows per video),

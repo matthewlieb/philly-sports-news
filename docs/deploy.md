@@ -26,7 +26,11 @@ All three build from this GitHub repo and redeploy on every push to `main`. Cron
 | `GA_MEASUREMENT_ID` | web | Google Analytics 4 ID, e.g. `G-XXXXXXX` (optional) |
 | `GOOGLE_SITE_VERIFICATION` | web | Search Console HTML-tag verification code (optional) |
 | `X_API_KEY`, `X_API_SECRET`, `X_ACCESS_TOKEN`, `X_ACCESS_TOKEN_SECRET` | tweet-bot | X OAuth 1.0a credentials |
-| `BRIEF_MODEL`, `TWEET_MODEL` | optional | Override the OpenAI model (default `gpt-5.4-mini`) |
+| `BRIEF_MODEL`, `TWEET_MODEL` | optional | Override the OpenAI model (default `gpt-5.4-mini`); `FACTCHECK_MODEL` defaults to `gpt-5.4` |
+| `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN` | eagles-shorts | From `scripts/youtube_auth.py` |
+| `IG_USER_ID`, `IG_ACCESS_TOKEN` | eagles-shorts | Instagram Login API; token auto-refreshes (stored in Redis) |
+| `S3_*` | eagles-shorts | References to the `shorts-media` bucket; Instagram downloads each video from a 1-hour presigned link |
+| `SHORTS_PRIVACY` | eagles-shorts | `public` since Oct 12, 2026 |
 
 ## Redis keys
 
