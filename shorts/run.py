@@ -7,7 +7,7 @@
 
 --auto decides what is due each hour:
   morning   once today's brief exists (written ~7am ET) and today's morning video hasn't gone out
-  postgame  3.5 to 20 hours after kickoff of a finished game that hasn't had one: refreshes today's
+  postgame  4.5 to 20 hours after kickoff of a finished game that hasn't had one: refreshes today's
             brief with the recaps, then makes a result-first video
 """
 import argparse
@@ -29,7 +29,7 @@ from shorts.render import render  # noqa: E402
 from shorts.script import write_script  # noqa: E402
 from shorts.voice import narrate  # noqa: E402
 
-POSTGAME_WINDOW_HOURS = (3.5, 20)
+POSTGAME_WINDOW_HOURS = (4.5, 20)
 
 
 def _recent_hooks(team: str, limit: int = 4) -> list[str]:
