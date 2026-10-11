@@ -9,6 +9,8 @@ from pathlib import Path
 import requests
 from openai import OpenAI
 
+from lib.pronunciation import for_speech
+
 _OPENAI_INSTRUCTIONS = (
     "Energetic Philadelphia sports-radio host giving a quick update. Fast, punchy pace with confident emphasis "
     "on names and numbers. Conversational, a little edge, never shouty. No long pauses between sentences."
@@ -82,7 +84,7 @@ def narrate(beats: list[dict], workdir: Path) -> tuple[Path, list[dict]]:
                     "-t", str(gap), str(silence)], check=True)
     for i, beat in enumerate(beats):
         mp3, wav = workdir / f"beat{i}.mp3", workdir / f"beat{i}.wav"
-        tts(beat["say"], mp3)
+        tts(for_speech(beat["say"]), mp3)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-af", f"atempo={tempo}",
                         "-ar", "44100", "-ac", "1", str(wav)], check=True)
         d = duration(wav)

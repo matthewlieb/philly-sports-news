@@ -4,6 +4,7 @@ import os
 
 from openai import OpenAI
 
+from lib.espn import facts_text
 from lib.teams import TEAMS
 
 _SYSTEM = """You write the daily {team} short-form video (YouTube Shorts / Instagram Reels) for a {name} fan account.
@@ -18,6 +19,7 @@ Retention rules (these decide whether the video gets shown to anyone):
 Accuracy rules:
 - Use ONLY facts from the brief and the ESPN facts below. Never add stats, quotes, opponents, dates or player details from memory.
 - Rumors must be called rumors. Attribute big claims to the outlet ("per PhillyVoice").
+- Freshness: lead with the newest development. Anything the brief calls earlier this week is context, not the hook.
 
 On-screen cards: each beat may show one card that shows the same fact the beat is saying at that moment (never a fact from a different beat).
 - "stat": a number or short value (label like "RECORD", value like "2-2", detail like "2nd in NFC East")
@@ -32,19 +34,6 @@ Also write:
 - hashtags: 3 to 5 relevant hashtags.
 
 Return JSON: {{"beats": [{{"say": "...", "card": {{"kind": "stat|matchup|text|none", "label": "", "value": "", "detail": ""}}}}], "hook_text": "max 7 words, the on-screen version of beat 1", "title": "...", "caption": "...", "hashtags": ["#..."]}}"""
-
-
-def _facts_block(snapshot: dict) -> str:
-    if not snapshot:
-        return "ESPN facts: unavailable."
-    lines = [f"Record: {snapshot.get('record')}", f"Standing: {snapshot.get('standing')}"]
-    if g := snapshot.get("last_game"):
-        result = "W" if g["won"] else "L"
-        lines.append(f"Last game: {result} {g['our_score']}-{g['their_score']} {'vs' if g['home'] else 'at'} {g['opponent']} ({g['kickoff_et']})")
-    if g := snapshot.get("next_game"):
-        lines.append(f"Next game: {'vs' if g['home'] else 'at'} {g['opponent']} ({g['opponent_abbr']}), {g['kickoff_et']}"
-                     + (f", {g['venue']}" if g.get("venue") else ""))
-    return "ESPN facts:\n" + "\n".join(lines)
 
 
 def _brief_block(brief: dict) -> str:
@@ -63,11 +52,21 @@ def _clean(text: str) -> str:
     return " ".join(text.replace("—", ", ").replace("–", "-").replace(" ,", ",").split())
 
 
-def write_script(team: str, brief: dict, snapshot: dict) -> dict:
+_POSTGAME = """
+
+This is the POSTGAME video for the game that just ended. The hook is the result and why it went that way. Use ESPN's
+final score and stat leaders exactly (a "FINAL" matchup card and stat cards for the standout performances), then one
+beat on what it means going forward, then the comment question."""
+
+
+def write_script(team: str, brief: dict, snapshot: dict, postgame: bool = False, recent_hooks: list[str] = ()) -> dict:
     t = TEAMS[team]
+    system = _SYSTEM.format(team=t["full_name"], name=t["name"]) + (_POSTGAME if postgame else "")
+    recent = ("\n\nRecent videos led with these; don't open the same way unless something new happened:\n"
+              + "\n".join(f"- {h}" for h in recent_hooks)) if recent_hooks else ""
     messages = [
-        {"role": "system", "content": _SYSTEM.format(team=t["full_name"], name=t["name"])},
-        {"role": "user", "content": f"{_brief_block(brief)}\n\n{_facts_block(snapshot)}"},
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"{_brief_block(brief)}\n\n{facts_text(snapshot)}{recent}"},
     ]
     for _ in range(2):
         resp = OpenAI().chat.completions.create(
