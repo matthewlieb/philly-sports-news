@@ -1,11 +1,12 @@
 # Daily Eagles shorts (YouTube Shorts + Instagram Reels)
 
 Every morning, after the daily briefs are written, this turns the Eagles brief into a ~30 second vertical video and posts it.
+After each game it also makes a result-first postgame video (an hourly `--auto` run decides what is due).
 
 ```
-brief (lib/briefs) + ESPN facts (espn.py)
+brief (lib/briefs, dated sources, newest first) + ESPN facts (lib/espn.py: score, stat leaders, schedule)
   -> script.py   hook-first script, 4-5 beats, ~80 words, on-screen cards, title/caption/hashtags
-  -> voice.py    text-to-speech per beat (OpenAI or ElevenLabs) + word timings (Whisper)
+  -> voice.py    text-to-speech per beat (OpenAI or ElevenLabs, names respelled via lib/pronunciation.py) + word timings
   -> render.py   stadium b-roll (broll.py) + team tint + graphics.py frames (hook, cards, karaoke captions)
   -> publish.py  YouTube Shorts (private/unlisted/public) and Instagram Reels (public only)
 ```
@@ -19,7 +20,8 @@ monetize templated, repetitive uploads). No game footage, player images or team 
 
 ```bash
 python -m shorts.run --team eagles --out /tmp            # render only
-python -m shorts.run --team eagles --publish             # render and post
+python -m shorts.run --team eagles --publish             # render and post the morning video
+python -m shorts.run --team eagles --auto --publish      # hourly: morning or postgame, whichever is due
 python -m shorts.run --team eagles --script s.json       # re-render an existing script (e.g. another voice)
 ```
 
