@@ -109,7 +109,7 @@ def facts_text(snapshot: dict) -> str:
         ago = hours_since(g["kickoff_utc"])
         when = f"{ago:.0f} hours ago" if ago < 48 else g["kickoff_et"]
         lines.append(f"Last game (kicked off {when}): {'W' if g['won'] else 'L'} {g['our_score']}-{g['their_score']} "
-                     f"{'vs' if g['home'] else 'at'} {g['opponent']}")
+                     f"{'vs' if g['home'] else 'at'} {g['opponent']}" + (f", {g['venue']}" if g.get("venue") else ""))
         if ago < 48:
             lines += [f"  {l}" for l in g.get("box_score") or []]
     if g := snapshot.get("next_game"):
