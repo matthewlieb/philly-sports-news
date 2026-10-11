@@ -8,9 +8,10 @@ load_dotenv()
 
 import json  # noqa: E402
 import secrets  # noqa: E402
+import threading  # noqa: E402
+import time  # noqa: E402
 
 from flask import Flask, Response, abort, redirect, render_template, request, session, url_for  # noqa: E402
-from flask_caching import Cache  # noqa: E402
 
 import lib.config as config  # noqa: E402
 from lib import briefs as brief_store  # noqa: E402
@@ -24,12 +25,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
 app.config.update(SESSION_COOKIE_SECURE=bool(os.environ.get("SECRET_KEY")), SESSION_COOKIE_SAMESITE="Strict",
                   SESSION_COOKIE_HTTPONLY=True)
-
-_redis_url = os.environ.get("REDIS_URL")
-app.config["CACHE_TYPE"] = "redis" if _redis_url else "simple"
-app.config["CACHE_REDIS_URL"] = _redis_url
-app.config["CACHE_DEFAULT_TIMEOUT"] = 3600
-cache = Cache(app)
 
 ADSENSE_CLIENT = "ca-pub-5735663043216445"
 _BOT_MARKERS = ("bot", "crawl", "spider", "slurp", "preview", "monitor", "curl", "python", "headless")
@@ -65,8 +60,43 @@ def _count_pageview(response):
     return response
 
 
-@cache.memoize(timeout=3600)
-def get_team_articles(team):
+_refreshing: set[str] = set()
+_refresh_lock = threading.Lock()
+
+
+def _stale_while_revalidate(name: str, fn, max_age: int = 3600):
+    """Serve the last stored result instantly and rebuild it in the background once it is older than max_age.
+
+    Rebuilding a team page means scraping every news source (~20s), so no visitor should ever wait for it;
+    only the very first build of a key (nothing stored yet) happens inline.
+    """
+    r, k = store.client(), store.key("page", name)
+    raw = r.get(k)
+
+    def rebuild():
+        try:
+            value = fn()
+            r.set(k, json.dumps({"at": time.time(), "value": value}))
+            return value
+        finally:
+            with _refresh_lock:
+                _refreshing.discard(k)
+
+    if raw is None:
+        with _refresh_lock:
+            _refreshing.add(k)
+        return rebuild()
+    cached = json.loads(raw)
+    if time.time() - cached["at"] > max_age:
+        with _refresh_lock:
+            start = k not in _refreshing
+            _refreshing.add(k)
+        if start:
+            threading.Thread(target=rebuild, daemon=True).start()
+    return cached["value"]
+
+
+def _build_team_articles(team):
     articles = collect_ranked_articles(team, max_articles=20)
     if not articles:
         return []
@@ -77,11 +107,14 @@ def get_team_articles(team):
     return [a for a in articles if a["title"]]
 
 
-@cache.memoize(timeout=3600)
+def get_team_articles(team):
+    return _stale_while_revalidate(f"articles:{team}", lambda: _build_team_articles(team))
+
+
 def get_team_video(team):
     if not config.api_key:
         return None
-    return get_embeddable_video_id(team, config.api_key)
+    return _stale_while_revalidate(f"video:{team}", lambda: get_embeddable_video_id(team, config.api_key))
 
 
 def render_team(team):
