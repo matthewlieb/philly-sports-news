@@ -80,6 +80,40 @@ def _due(team: str, day: str) -> tuple[str | None, dict]:
     return None, snapshot
 
 
+def _carousels(team: str, day: str, snapshot: dict, out_dir: Path) -> None:
+    """Instagram carousels that are due: postgame recap (after the postgame video refreshed the brief)
+    and the weekly "5 things" on Tuesdays from noon ET."""
+    from shorts import carousel
+    from shorts.publish import upload_instagram_carousel
+
+    r = store.client()
+    due = []
+    game = snapshot.get("last_game")
+    if (game and r.get(store.key("shorts", team, "postgame", game["id"]))
+            and not r.get(store.key("carousel", team, "postgame", game["id"]))
+            and (brief := briefs.get_brief(team, day))):
+        due.append((store.key("carousel", team, "postgame", game["id"]), "postgame",
+                    lambda: (carousel.postgame_slides(team, snapshot, brief), carousel.postgame_caption(team, snapshot, brief))))
+    now = datetime.now(briefs.EASTERN)
+    week = now.strftime("%G-W%V")
+    if now.weekday() == 1 and now.hour >= 12 and not r.get(store.key("carousel", team, "weekly", week)):
+        due.append((store.key("carousel", team, "weekly", week), "weekly", lambda: carousel.weekly_slides(team, day)))
+    for key, kind, build in due:
+        made = build()
+        if not made:
+            print(f"Not enough material for the {kind} carousel.")
+            continue
+        slides, caption = made
+        paths = carousel.save(slides, out_dir, f"{team}-{day}-{kind}")
+        try:
+            result = upload_instagram_carousel(paths, caption)
+        except Exception as e:
+            print(f"{kind} carousel failed: {e}")
+            continue
+        print(f"Posted {kind} carousel: {result.get('url')}")
+        r.set(key, json.dumps(result))
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--team", default="eagles", choices=list(TEAMS))
@@ -98,13 +132,21 @@ def main():
         return
     if args.auto:
         kind, snapshot = _due(team, day)
-        if not kind:
-            print("Nothing due this hour.")
-            return
-    elif kind == "postgame":
+        social_ready = args.publish and os.environ.get("IG_USER_ID") and os.environ.get("SHORTS_PRIVACY") == "public"
+        if kind:
+            _video(args, team, day, kind, snapshot)
+        else:
+            print("No video due this hour.")
+        if social_ready:
+            _carousels(team, day, snapshot, Path(args.out))
+        return
+    if kind == "postgame":
         snapshot = team_snapshot(team)
-    print(f"Making the {kind} video for {team}, {day}")
+    _video(args, team, day, kind, snapshot)
 
+
+def _video(args, team: str, day: str, kind: str, snapshot: dict | None) -> None:
+    print(f"Making the {kind} video for {team}, {day}")
     if kind == "postgame" and not args.script:
         brief = briefs.generate_brief(team, day, postgame=True)
         if brief:

@@ -6,7 +6,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from flask import Flask, Response, abort, redirect, render_template, request, url_for  # noqa: E402
+import json  # noqa: E402
+import secrets  # noqa: E402
+
+from flask import Flask, Response, abort, redirect, render_template, request, session, url_for  # noqa: E402
 from flask_caching import Cache  # noqa: E402
 
 import lib.config as config  # noqa: E402
@@ -18,6 +21,9 @@ from lib.teams import SITE_NAME, SITE_URL, TEAM_SLUGS, TEAMS, X_HANDLE, brief_pa
 from lib.youtube_utils import create_safe_embed_code, get_embeddable_video_id  # noqa: E402
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY") or secrets.token_hex(32)
+app.config.update(SESSION_COOKIE_SECURE=bool(os.environ.get("SECRET_KEY")), SESSION_COOKIE_SAMESITE="Strict",
+                  SESSION_COOKIE_HTTPONLY=True)
 
 _redis_url = os.environ.get("REDIS_URL")
 app.config["CACHE_TYPE"] = "redis" if _redis_url else "simple"
@@ -160,9 +166,51 @@ def privacy():
     return render_template("privacy.html", canonical=SITE_URL + "/privacy")
 
 
+def _admin_ok() -> bool:
+    key = os.environ.get("ADMIN_KEY")
+    if key and secrets.compare_digest(request.args.get("key", ""), key):
+        session["admin"] = True
+    return bool(key) and session.get("admin") is True
+
+
+@app.route("/admin/comments")
+def admin_comments():
+    if not _admin_ok():
+        abort(404)
+    r = store.client()
+    items = []
+    for member in r.zrevrange(store.key("comments", "queue"), 0, 149):
+        platform, cid = member.split(":", 1)
+        if raw := r.get(store.key("comments", "item", platform, cid)):
+            items.append(json.loads(raw))
+    items.sort(key=lambda i: (i["status"] != "pending", -i.get("created", 0)))
+    return render_template("admin_comments.html", items=items)
+
+
+@app.route("/admin/comments/<platform>/<path:cid>", methods=["POST"])
+def admin_comment_action(platform, cid):
+    if not _admin_ok():
+        abort(404)
+    r = store.client()
+    key = store.key("comments", "item", platform, cid)
+    raw = r.get(key)
+    if not raw:
+        abort(404)
+    item = json.loads(raw)
+    action = request.form.get("action")
+    if action == "approve" and request.form.get("reply", "").strip():
+        item.update(status="approved", draft=request.form["reply"].strip()[:1000])
+    elif action == "hide":
+        item["status"] = "hide_approved"
+    elif action == "dismiss":
+        item["status"] = "dismissed"
+    r.set(key, json.dumps(item), ex=60 * 86400)
+    return redirect(url_for("admin_comments"))
+
+
 @app.route("/robots.txt")
 def robots():
-    body = f"User-agent: *\nAllow: /\nDisallow: /health\n\nSitemap: {SITE_URL}/sitemap.xml\n"
+    body = f"User-agent: *\nAllow: /\nDisallow: /health\nDisallow: /admin\n\nSitemap: {SITE_URL}/sitemap.xml\n"
     return Response(body, mimetype="text/plain")
 
 

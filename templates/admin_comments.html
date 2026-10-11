@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Comment review | {{ site_name }}{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <h1>Comment review</h1>
+  <p class="lede">Drafted by the comment assistant. Approved replies and hides go out on its next run (every 30 minutes).</p>
+
+  {% for c in items %}
+  <section class="card comment-card status-{{ c.status }}">
+    <div class="card-body">
+      <p class="eyebrow">{{ c.platform }} · {{ c.status.replace('_', ' ') }}{% if c.reason %} · {{ c.reason }}{% endif %}</p>
+      <p><strong>{{ c.author }}:</strong> {{ c.text }}</p>
+      {% if c.link %}<p class="muted"><a href="{{ c.link }}" target="_blank" rel="noopener">View post</a></p>{% endif %}
+      {% if c.error %}<p class="muted">Error: {{ c.error }}</p>{% endif %}
+      {% if c.status == 'pending' %}
+      <form method="post" action="{{ url_for('admin_comment_action', platform=c.platform, cid=c.id) }}">
+        {% if c.action == 'reply' %}
+        <textarea name="reply" rows="2" class="form-control mb-2">{{ c.draft }}</textarea>
+        <button class="btn btn-success btn-sm" name="action" value="approve">Approve reply</button>
+        {% else %}
+        <p class="muted">Suggested: hide this comment.</p>
+        <button class="btn btn-warning btn-sm" name="action" value="hide">Hide comment</button>
+        {% endif %}
+        <button class="btn btn-outline-secondary btn-sm" name="action" value="dismiss">Dismiss</button>
+      </form>
+      {% elif c.draft %}
+      <p class="muted">Reply: {{ c.draft }}</p>
+      {% endif %}
+    </div>
+  </section>
+  {% else %}
+  <p>No comments yet.</p>
+  {% endfor %}
+</main>
+{% endblock %}

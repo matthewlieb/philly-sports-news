@@ -69,6 +69,18 @@ def _shadowed(img: Image.Image, radius: int = 18, opacity: int = 150) -> Image.I
     return out
 
 
+def field_background(size: tuple[int, int], team: str, line_gap: int = 135) -> Image.Image:
+    """Team-color gradient with faint yard lines (profile pictures, banners, carousel slides)."""
+    w, h = size
+    base = Image.new("RGB", size, tuple(min(255, int(c * 1.5)) for c in THEMES[team]["dark"]))
+    shade = Image.linear_gradient("L").resize(size).point(lambda v: 185 + v * 70 // 255)
+    base = Image.composite(base, Image.new("RGB", size, (0, 0, 0)), shade)
+    d = ImageDraw.Draw(base, "RGBA")
+    for x in range(line_gap // 2, w, line_gap):
+        d.line([(x, 0), (x, h)], fill=(255, 255, 255, 22), width=max(2, w // 400))
+    return base
+
+
 def tint_layer(team: str) -> Image.Image:
     """Static team-colored wash over the background footage, darker toward the bottom for captions."""
     img = Image.new("RGBA", (W, H), (*THEMES[team]["dark"], 255))

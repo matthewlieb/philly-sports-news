@@ -1,11 +1,13 @@
 """Post a rendered short to YouTube Shorts and Instagram Reels.
 
-SHORTS_PRIVACY=private (default) | unlisted | public. Instagram has no private posts, so it is only
-used when SHORTS_PRIVACY=public.
+SHORTS_PRIVACY=private (default) | unlisted | public. Instagram, Facebook and Threads have no private posts,
+so they are only used when SHORTS_PRIVACY=public. Each platform is skipped until its variables are set.
 
 YouTube:   YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN (from scripts/youtube_auth.py)
 Instagram: IG_USER_ID, IG_ACCESS_TOKEN (long-lived token, Instagram API with Instagram Login), and the
            S3_* bucket variables: Instagram downloads the video from a temporary presigned URL
+Facebook:  FB_PAGE_ID, FB_PAGE_TOKEN
+Threads:   THREADS_USER_ID, THREADS_ACCESS_TOKEN
 """
 import os
 import time
@@ -76,16 +78,16 @@ def _ig_token() -> str:
     return token
 
 
-def _staged_url(video: Path) -> tuple[str, callable]:
-    """Instagram fetches the video from a URL, so put it in the Railway bucket and hand out a 1-hour
+def _staged_url(path: Path, content_type: str = "video/mp4") -> tuple[str, callable]:
+    """Instagram fetches media from a URL, so put the file in the Railway bucket and hand out a 1-hour
     presigned link. Returns the URL and a cleanup function."""
     import boto3
 
     s3 = boto3.client("s3", endpoint_url=os.environ["S3_ENDPOINT"], region_name="auto",
                       aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
                       aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"])
-    bucket, key = os.environ["S3_BUCKET"], f"reels/{uuid.uuid4().hex}.mp4"
-    s3.upload_file(str(video), bucket, key, ExtraArgs={"ContentType": "video/mp4"})
+    bucket, key = os.environ["S3_BUCKET"], f"media/{uuid.uuid4().hex}{path.suffix}"
+    s3.upload_file(str(path), bucket, key, ExtraArgs={"ContentType": content_type})
     url = s3.generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=3600)
     return url, lambda: s3.delete_object(Bucket=bucket, Key=key)
 
@@ -99,16 +101,7 @@ def upload_instagram(video: Path, caption: str) -> dict:
             "share_to_feed": "true", "access_token": token}).json()
         if "id" not in container:
             raise RuntimeError(f"Instagram container failed: {container}")
-        for _ in range(60):
-            status = requests.get(f"{_IG_GRAPH}/{container['id']}", timeout=30,
-                                  params={"fields": "status_code,status", "access_token": token}).json()
-            if status.get("status_code") == "FINISHED":
-                break
-            if status.get("status_code") == "ERROR":
-                raise RuntimeError(f"Instagram processing failed: {status}")
-            time.sleep(10)
-        else:
-            raise RuntimeError("Instagram processing timed out")
+        _ig_wait(container["id"], token)
         published = requests.post(f"{_IG_GRAPH}/{user}/media_publish", timeout=60,
                                   params={"creation_id": container["id"], "access_token": token}).json()
         if "id" not in published:
@@ -120,6 +113,121 @@ def upload_instagram(video: Path, caption: str) -> dict:
     return {"id": published["id"], "url": link}
 
 
+def _ig_wait(container_id: str, token: str) -> None:
+    for _ in range(60):
+        status = requests.get(f"{_IG_GRAPH}/{container_id}", timeout=30,
+                              params={"fields": "status_code,status", "access_token": token}).json()
+        if status.get("status_code") == "FINISHED":
+            return
+        if status.get("status_code") == "ERROR":
+            raise RuntimeError(f"Instagram processing failed: {status}")
+        time.sleep(5)
+    raise RuntimeError("Instagram processing timed out")
+
+
+def upload_instagram_carousel(images: list[Path], caption: str) -> dict:
+    token, user = _ig_token(), os.environ["IG_USER_ID"]
+    staged = [_staged_url(p, "image/jpeg") for p in images]
+    try:
+        children = []
+        for url, _ in staged:
+            item = requests.post(f"{_IG_GRAPH}/{user}/media", timeout=60, params={
+                "image_url": url, "is_carousel_item": "true", "access_token": token}).json()
+            if "id" not in item:
+                raise RuntimeError(f"Instagram carousel item failed: {item}")
+            children.append(item["id"])
+        for child in children:
+            _ig_wait(child, token)
+        container = requests.post(f"{_IG_GRAPH}/{user}/media", timeout=60, params={
+            "media_type": "CAROUSEL", "children": ",".join(children), "caption": caption[:2200],
+            "access_token": token}).json()
+        if "id" not in container:
+            raise RuntimeError(f"Instagram carousel container failed: {container}")
+        _ig_wait(container["id"], token)
+        published = requests.post(f"{_IG_GRAPH}/{user}/media_publish", timeout=60,
+                                  params={"creation_id": container["id"], "access_token": token}).json()
+        if "id" not in published:
+            raise RuntimeError(f"Instagram carousel publish failed: {published}")
+    finally:
+        for _, cleanup in staged:
+            cleanup()
+    link = requests.get(f"{_IG_GRAPH}/{published['id']}", timeout=30,
+                        params={"fields": "permalink", "access_token": token}).json().get("permalink")
+    return {"id": published["id"], "url": link}
+
+
+def upload_facebook_reel(video: Path, description: str) -> dict:
+    """Facebook Page Reel. FB_PAGE_ID + FB_PAGE_TOKEN (a Page token from a long-lived user token doesn't expire)."""
+    page, token = os.environ["FB_PAGE_ID"], os.environ["FB_PAGE_TOKEN"]
+    graph = f"https://graph.facebook.com/{os.environ.get('FB_API_VERSION', 'v23.0')}"
+    start = requests.post(f"{graph}/{page}/video_reels", timeout=60,
+                          params={"upload_phase": "start", "access_token": token}).json()
+    if "video_id" not in start:
+        raise RuntimeError(f"Facebook reel start failed: {start}")
+    url, cleanup = _staged_url(video)
+    try:
+        up = requests.post(start["upload_url"], timeout=300,
+                           headers={"Authorization": f"OAuth {token}", "file_url": url}).json()
+        if not up.get("success"):
+            raise RuntimeError(f"Facebook reel upload failed: {up}")
+        done = requests.post(f"{graph}/{page}/video_reels", timeout=60, params={
+            "upload_phase": "finish", "video_id": start["video_id"], "video_state": "PUBLISHED",
+            "description": description[:5000], "access_token": token}).json()
+        if not done.get("success"):
+            raise RuntimeError(f"Facebook reel publish failed: {done}")
+        for _ in range(60):
+            status = requests.get(f"{graph}/{start['video_id']}", timeout=30,
+                                  params={"fields": "status", "access_token": token}).json().get("status", {})
+            if status.get("video_status") in ("ready", "error") or status.get("processing_phase", {}).get("status") == "complete":
+                break
+            time.sleep(10)
+    finally:
+        cleanup()
+    return {"id": start["video_id"], "url": f"https://www.facebook.com/reel/{start['video_id']}"}
+
+
+def _threads_token() -> str:
+    """Long-lived Threads token, refreshed every ~20 days and kept in Redis (same pattern as Instagram)."""
+    r = store.client()
+    token = r.get(store.key("threads", "token")) or os.environ["THREADS_ACCESS_TOKEN"]
+    if time.time() - float(r.get(store.key("threads", "token_refreshed")) or 0) > 20 * 86400:
+        resp = requests.get("https://graph.threads.net/refresh_access_token",
+                            params={"grant_type": "th_refresh_token", "access_token": token}, timeout=30)
+        if resp.ok and resp.json().get("access_token"):
+            token = resp.json()["access_token"]
+            r.set(store.key("threads", "token"), token)
+            r.set(store.key("threads", "token_refreshed"), str(time.time()))
+    return token
+
+
+def upload_threads(video: Path, text: str) -> dict:
+    token, user = _threads_token(), os.environ["THREADS_USER_ID"]
+    graph = "https://graph.threads.net/v1.0"
+    url, cleanup = _staged_url(video)
+    try:
+        c = requests.post(f"{graph}/{user}/threads", timeout=60, params={
+            "media_type": "VIDEO", "video_url": url, "text": text[:500], "access_token": token}).json()
+        if "id" not in c:
+            raise RuntimeError(f"Threads container failed: {c}")
+        for _ in range(60):
+            st = requests.get(f"{graph}/{c['id']}", timeout=30, params={"fields": "status,error_message", "access_token": token}).json()
+            if st.get("status") == "FINISHED":
+                break
+            if st.get("status") == "ERROR":
+                raise RuntimeError(f"Threads processing failed: {st}")
+            time.sleep(10)
+        else:
+            raise RuntimeError("Threads processing timed out")
+        pub = requests.post(f"{graph}/{user}/threads_publish", timeout=60,
+                            params={"creation_id": c["id"], "access_token": token}).json()
+        if "id" not in pub:
+            raise RuntimeError(f"Threads publish failed: {pub}")
+    finally:
+        cleanup()
+    link = requests.get(f"{graph}/{pub['id']}", timeout=30, params={"fields": "permalink", "access_token": token}).json()
+    return {"id": pub["id"], "url": link.get("permalink")}
+
+
 def publish_all(video: Path, script: dict, team: str, day: str) -> dict:
     privacy = os.environ.get("SHORTS_PRIVACY", "private")
     title, description, hashtags = _texts(script, team, day)
@@ -129,9 +237,15 @@ def publish_all(video: Path, script: dict, team: str, day: str) -> dict:
             results["youtube"] = upload_youtube(video, title, description, hashtags, privacy)
         except Exception as e:
             results["youtube"] = {"error": str(e)[:500]}
-    if os.environ.get("IG_USER_ID") and privacy == "public":
-        try:
-            results["instagram"] = upload_instagram(video, description)
-        except Exception as e:
-            results["instagram"] = {"error": str(e)[:500]}
+    if privacy != "public":
+        return results
+    social = [("instagram", "IG_USER_ID", lambda: upload_instagram(video, description)),
+              ("facebook", "FB_PAGE_ID", lambda: upload_facebook_reel(video, description)),
+              ("threads", "THREADS_USER_ID", lambda: upload_threads(video, f"{script.get('caption', '')} {' '.join(hashtags[:2])}\n\nFull brief: {brief_url(team, day)}"))]
+    for name, env, upload in social:
+        if os.environ.get(env):
+            try:
+                results[name] = upload()
+            except Exception as e:
+                results[name] = {"error": str(e)[:500]}
     return results

@@ -8,21 +8,8 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from shorts.graphics import THEMES, _display, _line_height, _sans  # noqa: E402
+from shorts.graphics import THEMES, _display, _line_height, _sans, field_background as _field  # noqa: E402
 from lib.teams import TEAMS  # noqa: E402
-
-
-def _field(size: tuple[int, int], team: str, line_gap: int) -> Image.Image:
-    """Team-color gradient with faint yard lines."""
-    w, h = size
-    dark = THEMES[team]["dark"]
-    base = Image.new("RGB", size, tuple(min(255, int(c * 1.5)) for c in dark))
-    shade = Image.linear_gradient("L").resize(size).point(lambda v: 185 + v * 70 // 255)
-    base = Image.composite(base, Image.new("RGB", size, (0, 0, 0)), shade)
-    d = ImageDraw.Draw(base, "RGBA")
-    for x in range(line_gap // 2, w, line_gap):
-        d.line([(x, 0), (x, h)], fill=(255, 255, 255, 22), width=max(2, w // 400))
-    return base
 
 
 def profile(team: str) -> Image.Image:

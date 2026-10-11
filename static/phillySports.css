@@ -111,3 +111,8 @@ a { color: var(--team-dark); }
 .site-footer { background: var(--team-dark); color: #fff; text-align: center; padding: 24px 16px; }
 .site-footer p { color: rgba(255,255,255,0.85); margin: 0.75rem 0 0; font-size: 0.9rem; }
 .footer-links a { color: #fff; margin: 0 0.6rem; display: inline-block; }
+
+/* Admin comment review */
+.comment-card { margin-bottom: 16px; border-left: 6px solid #d1d5db; }
+.comment-card.status-pending { border-left-color: var(--team-dark); }
+.comment-card.status-replied, .comment-card.status-hidden { opacity: 0.6; }

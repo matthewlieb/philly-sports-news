@@ -44,13 +44,21 @@ _TEAM_STATS = {"Total Yards", "Turnovers", "3rd down efficiency", "Possession", 
                "Field Goal %", "Three Point %", "Rebounds", "Shots", "Power Play Goals", "Hits", "Errors"}
 
 
-def box_score(team: str, event_id: str, per_group: int = 3) -> list[str]:
+def leaders(summary: dict) -> list[dict]:
+    """Category leaders per team: [{"team": "PHI", "category": "Passing Yards", "name": ..., "value": ...}]."""
+    out = []
+    for side in summary.get("leaders") or []:
+        for cat in side.get("leaders") or []:
+            if cat.get("leaders"):
+                top = cat["leaders"][0]
+                out.append({"team": side.get("team", {}).get("abbreviation", ""), "category": cat.get("displayName"),
+                            "name": top["athlete"]["displayName"], "value": top.get("displayValue")})
+    return out
+
+
+def box_score(summary: dict, per_group: int = 3) -> list[str]:
     """Every stat labeled, zeros included, e.g. 'PHI passing - Jalen Hurts: C/ATT 21/40, YDS 220, TD 1, INT 0'.
     The labels matter: a summary that leaves out '0 INT' invites a model to guess."""
-    try:
-        summary = _get(f"{_BASE}/{_SPORTS[team]}/summary?event={event_id}")
-    except Exception:
-        return []
     box = summary.get("boxscore") or {}
     lines = []
     for side in box.get("teams") or []:
@@ -65,12 +73,7 @@ def box_score(team: str, event_id: str, per_group: int = 3) -> list[str]:
             for athlete in (group.get("athletes") or [])[:per_group]:
                 pairs = ", ".join(f"{l} {v}" for l, v in zip(labels, athlete.get("stats") or []))
                 lines.append(f"{abbr} {group.get('name') or 'players'} - {athlete['athlete']['displayName']}: {pairs}")
-    for side in summary.get("leaders") or []:
-        abbr = side.get("team", {}).get("abbreviation", "")
-        for cat in side.get("leaders") or []:
-            if cat.get("leaders"):
-                top = cat["leaders"][0]
-                lines.append(f"{abbr} game leader, {cat.get('displayName')}: {top['athlete']['displayName']} ({top.get('displayValue')})")
+    lines += [f"{l['team']} game leader, {l['category']}: {l['name']} ({l['value']})" for l in leaders(summary)]
     return lines
 
 
@@ -87,7 +90,12 @@ def team_snapshot(team: str) -> dict:
     upcoming = [g for g in games if not g["completed"]]
     last = played[-1] if played else None
     if last:
-        last["box_score"] = box_score(team, last["id"])
+        try:
+            summary = _get(f"{_BASE}/{_SPORTS[team]}/summary?event={last['id']}")
+        except Exception:
+            summary = {}
+        last["box_score"] = box_score(summary)
+        last["leaders"] = leaders(summary)
     return {
         "record": (info.get("record", {}).get("items") or [{}])[0].get("summary"),
         "standing": info.get("standingSummary"),
