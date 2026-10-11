@@ -1,6 +1,6 @@
 # Roadmap
 
-Status as of October 9, 2026.
+Status as of October 11, 2026.
 
 ## Done
 
@@ -8,23 +8,22 @@ Status as of October 9, 2026.
 - Site: one team template, daily briefs with archive, SEO tags, sitemap, robots.txt, ads.txt, About and Privacy pages.
 - Measurement: Google Analytics (`G-T725JB9K0P`), Search Console verification, daily pageview counts in Redis.
 - Tweet bot rebuilt (Redis memory, safe links, brief promotion). **Paused**: X API is pay-per-use since Feb 2026.
-- Daily Eagles short pipeline (`shorts/`), scheduled on Railway at 11:30 UTC. Skips until an account is connected.
+- Daily Eagles short pipeline (`shorts/`), scheduled on Railway at 11:30 UTC, OpenAI voice.
+- Accounts connected: YouTube "Eagles Daily | Philly Sport Daily" and Instagram @eaglesdaily.psd. Videos upload to
+  YouTube as **private** for review; Instagram starts when `SHORTS_PRIVACY=public`.
+- Search Console verified and sitemap submitted.
 
 ## Waiting on Matthew
 
-1. **Pick a voice** from `~/Desktop/eagles-short-samples/` (OpenAI ~free, or ElevenLabs Starter ~$5-6/month).
-2. **YouTube channel**: create it, set the Google Cloud OAuth consent screen to "In production", run
-   `python scripts/youtube_auth.py <client_secrets.json>` and share the printed values.
-3. **Instagram account**: switch to Creator/Business, create a Meta app with Instagram login, share
-   `IG_USER_ID` and a long-lived `IG_ACCESS_TOKEN`.
-4. **Search Console**: click Verify and submit `sitemap.xml`.
-5. **AdSense**: request a new review around late October, once a few weeks of briefs are indexed.
-6. **X**: decide later whether to buy API credits (~$1.35-12.50/month depending on links).
+1. **Review the private uploads** on YouTube Studio, then say when to go public.
+2. **Confirm** the Google Cloud OAuth consent screen (project instabot-455700) is "In production".
+3. **AdSense**: request a new review around late October, once a few weeks of briefs are indexed.
+4. **X**: decide later whether to buy API credits (~$1.35-12.50/month depending on links).
 
 ## Next to build
 
-1. **Go live with shorts**: connect accounts, post privately for a few days, review, then switch
-   `SHORTS_PRIVACY=public` (Instagram starts posting at that point).
+1. **Go live with shorts**: after review, set `SHORTS_PRIVACY=public` on `eagles-shorts` (Instagram starts too).
+   Add a per-team pronunciation dictionary (respell names for the voice only; captions keep real spelling).
 2. **Cross-posting** to Facebook Reels and Threads (free APIs, same video and caption).
 3. **Page-management agents** (only actions the platforms allow):
    - Comment assistant: reply to genuine questions on our own posts, hide spam. Starts in draft/review mode.
