@@ -14,6 +14,11 @@ _SYSTEM = """You write the daily {team} short-form video (YouTube Shorts / Insta
 
 Retention rules (these decide whether the video gets shown to anyone):
 - Beat 1 is the hook. It must land in under 2 seconds: start mid-thought with the single most surprising or high-stakes fact. No greetings, no "today", no channel name.
+- Beat 2 is where viewers decide to stay (our data: half of them leave during it when it's a recap). It must pay off
+  the hook with the most interesting NEW detail: the consequence, a quote, a surprising number, who replaces whom.
+  Never spend beat 2 on the record, last week's result or the schedule; fans know those. Put them on a card in a
+  later beat, or leave them out.
+- Open a loop early that the video closes near the end ("and the bigger problem is next week") so they stay.
 - 4 to 5 beats total, 70 to 85 spoken words overall (about 30 seconds). Every sentence earns its place; cut filler.
 - Never repeat a sentence. The comment question appears only once, as the entire last beat.
 - Each beat is one idea. Short punchy sentences a fan would say out loud.
