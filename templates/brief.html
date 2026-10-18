@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_signup.html" import signup %}
 
 {% block title %}{{ brief.headline }} | {{ team.name }} Daily Brief {{ brief.date }}{% endblock %}
 {% block description %}{{ brief.summary | truncate(155) }}{% endblock %}
@@ -42,6 +43,8 @@
         {% endif %}
       </section>
       {% endfor %}
+
+      {{ signup("brief-" ~ team.slug, heading="Get this brief every morning") }}
 
       {% if brief.sources %}
       <section class="brief-reading">

@@ -32,8 +32,11 @@ Status as of October 11, 2026 (evening).
 ## Next to build
 
 - **Facebook + Threads credentials** (Matthew): Facebook Page + Page token, Threads tester + token.
-- **Daily email**: pick a provider (Buttondown free to 100 subscribers; beehiiv free to 2,500 but its send API is paid),
-  add a signup box on the site, and send each morning's briefs automatically.
+- **Daily email** (built, Oct 18; off until `BUTTONDOWN_API_KEY` is set on Railway `web`, `daily-briefs` and
+  `eagles-shorts`): signup boxes on team pages, briefs and `/newsletter` (double opt-in via Buttondown, honeypot,
+  5 signups/IP/hour); `jobs.daily_briefs` sends one email right after the briefs (~7am ET): the Eagles brief in full
+  plus a headline per other team. Video descriptions link to `/newsletter`. Code: `lib/newsletter.py`.
+  Goal: ~1,000 subscribers and 20k monthly pageviews by spring, then sell small sponsorships.
 
 1. **Cross-posting** to Facebook Reels and Threads (free APIs, same video and caption).
 3. **Page-management agents** (only actions the platforms allow):

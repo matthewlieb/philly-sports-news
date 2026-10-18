@@ -11,10 +11,11 @@ import secrets  # noqa: E402
 import threading  # noqa: E402
 import time  # noqa: E402
 
-from flask import Flask, Response, abort, redirect, render_template, request, session, url_for  # noqa: E402
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, session, url_for  # noqa: E402
 
 import lib.config as config  # noqa: E402
 from lib import briefs as brief_store  # noqa: E402
+from lib import newsletter  # noqa: E402
 from lib import store  # noqa: E402
 from lib.article_enhancer import enhance_article_data  # noqa: E402
 from lib.articles import collect_ranked_articles  # noqa: E402
@@ -41,6 +42,7 @@ def _site_globals():
         "ga_id": os.environ.get("GA_MEASUREMENT_ID"),
         "site_verification": os.environ.get("GOOGLE_SITE_VERIFICATION"),
         "year": date.today().year,
+        "newsletter_on": newsletter.enabled(),
     }
 
 
@@ -213,6 +215,43 @@ def briefs_archive(team=None):
     )
 
 
+@app.route("/newsletter")
+def newsletter_page():
+    if not newsletter.enabled():
+        return redirect("/", code=302)
+    return render_template("newsletter.html", canonical=SITE_URL + "/newsletter",
+                           status=request.args.get("status"), message=_SIGNUP_MESSAGES.get(request.args.get("status")))
+
+
+_SIGNUP_MESSAGES = {
+    "ok": "Almost done: check your inbox and click the confirmation link.",
+    "exists": "You're already on the list. Thanks!",
+    "invalid": "That email address doesn't look right.",
+    "limited": "Too many signups from this connection. Try again later.",
+    "error": "Something went wrong on our end. Please try again in a minute.",
+}
+
+
+@app.route("/subscribe", methods=["POST"])
+def subscribe():
+    if not newsletter.enabled():
+        abort(404)
+    if request.form.get("website"):  # hidden field only bots fill in
+        status = "ok"
+    else:
+        ip = (request.headers.get("X-Real-IP") or request.headers.get("X-Forwarded-For") or request.remote_addr or "")
+        ip = ip.split(",")[0].strip()
+        try:
+            status = newsletter.subscribe(request.form.get("email", ""), ip=ip,
+                                          source=request.form.get("source", ""))
+        except Exception as e:
+            app.logger.warning("newsletter signup failed: %s", e)
+            status = "error"
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(status=status, message=_SIGNUP_MESSAGES[status]), 200 if status in ("ok", "exists") else 400
+    return redirect(url_for("newsletter_page", status=status))
+
+
 @app.route("/about")
 def about():
     return render_template("about.html", canonical=SITE_URL + "/about")
@@ -290,6 +329,8 @@ def sitemap():
     urls += [(SITE_URL + f"/{t}/briefs", today, "daily") for t in TEAM_SLUGS]
     urls += [(SITE_URL + brief_path(t, d), d, "never") for t, d in brief_store.recent_briefs(limit=2000)]
     urls += [(SITE_URL + "/about", None, "yearly"), (SITE_URL + "/privacy", None, "yearly")]
+    if newsletter.enabled():
+        urls.append((SITE_URL + "/newsletter", None, "monthly"))
     return Response(render_template("sitemap.xml", urls=urls), mimetype="application/xml")
 
 

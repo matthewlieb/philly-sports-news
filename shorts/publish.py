@@ -16,10 +16,16 @@ from pathlib import Path
 
 import requests
 
-from lib import store
-from lib.teams import TEAMS, brief_url, team_url
+from lib import newsletter, store
+from lib.teams import SITE_URL, TEAMS, brief_url, team_url
 
 _IG_GRAPH = f"https://graph.instagram.com/{os.environ.get('IG_API_VERSION', 'v23.0')}"
+
+
+def _email_line(team: str) -> str:
+    if not newsletter.enabled():
+        return ""
+    return f"Get the {TEAMS[team]['name']} brief by email every morning: {SITE_URL}/newsletter\n"
 
 
 def _texts(script: dict, team: str, day: str) -> tuple[str, str, list[str]]:
@@ -29,15 +35,17 @@ def _texts(script: dict, team: str, day: str) -> tuple[str, str, list[str]]:
         description = (
             f"{script.get('caption', '').strip()}\n\n"
             f"Answers checked against: {' '.join(script.get('sources') or [])}\n"
-            f"Daily {TEAMS[team]['name']} news: {team_url(team)}\n\n"
-            "Narration is AI-generated.\n\n"
+            f"Daily {TEAMS[team]['name']} news: {team_url(team)}\n"
+            + _email_line(team) +
+            "\nNarration is AI-generated.\n\n"
             + (f"Photos: {'; '.join(script['photo_credits'])}\n\n" if script.get("photo_credits") else "")
             + " ".join(hashtags)
         )
         return title, description, hashtags
     description = (
         f"{script.get('caption', '').strip()}\n\n"
-        f"Full {TEAMS[team]['name']} brief with sources: {brief_url(team, day)}\n\n"
+        f"Full {TEAMS[team]['name']} brief with sources: {brief_url(team, day)}\n"
+        + _email_line(team) + "\n"
         f"Facts from the reporting linked in the brief. Narration is AI-generated.\n\n"
         + (f"Photos: {'; '.join(script['photo_credits'])}\n\n" if script.get("photo_credits") else "")
         + " ".join(hashtags)

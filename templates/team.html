@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_signup.html" import signup %}
 
 {% block title %}{{ team.name }} News Today: Latest {{ team.full_name }} Headlines | {{ site_name }}{% endblock %}
 {% block description %}The latest {{ team.full_name }} news from Philly's best outlets in one place, plus an original daily {{ team.name }} brief. Updated hourly.{% endblock %}
@@ -78,6 +79,8 @@
         </div>
       </section>
       {% endif %}
+
+      {{ signup(team.slug ~ "-sidebar") }}
 
       <script>
         sbd_odds('display', {"team": "PHI", "league": "{{ team.league }}", "show_concensus": true, "show_predictions": true,

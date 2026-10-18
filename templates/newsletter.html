@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "_signup.html" import signup %}
+
+{% block title %}Daily Eagles Email: The Morning Brief | {{ site_name }}{% endblock %}
+{% block description %}The day's Philadelphia Eagles news and what it means, in one free email every morning, plus a line on the Sixers, Phillies and Flyers.{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <div class="row">
+    <div class="col-lg-8 offset-lg-2 prose">
+      <h1>The morning brief, in your inbox</h1>
+      <p class="lede">One email around 7 a.m. with the Eagles news that matters and why, written from Philly's best reporting and linked to every source. Plus a quick line on the Sixers, Phillies and Flyers.</p>
+      {% if message %}<p class="signup-status signup-status-{{ status }}" role="status">{{ message }}</p>{% endif %}
+      {{ signup("newsletter", heading="Sign up free", blurb="Unsubscribe anytime with one click.") }}
+      <h2>What you get</h2>
+      <ul>
+        <li>The day's Eagles story, injuries and moves, in a two-minute read</li>
+        <li>Links to the original reporting for every claim</li>
+        <li>One headline each for the Sixers, Phillies and Flyers</li>
+      </ul>
+      <p class="muted">See a recent one: <a href="/briefs">the daily brief archive</a>. We never sell or share your email. <a href="/privacy">Privacy policy</a>.</p>
+    </div>
+  </div>
+</main>
+{% endblock %}

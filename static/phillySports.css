@@ -116,3 +116,16 @@ a { color: var(--team-dark); }
 .comment-card { margin-bottom: 16px; border-left: 6px solid #d1d5db; }
 .comment-card.status-pending { border-left-color: var(--team-dark); }
 .comment-card.status-replied, .comment-card.status-hidden { opacity: 0.6; }
+
+/* Newsletter signup */
+.signup-card { border-top: 6px solid var(--team-dark); background: #f8fafb; }
+.signup-card h2 { font-size: 1.2rem; font-weight: 700; color: var(--team-dark); }
+.signup-card p { font-size: 0.95rem; }
+.signup-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.signup-form input[type=email] { flex: 1 1 200px; min-width: 0; padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; }
+.signup-form button { padding: 0.5rem 1rem; font-weight: 600; border: 0; border-radius: 8px; background: var(--team-dark); color: #fff; }
+.signup-form button:disabled { opacity: 0.6; }
+.signup-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; }
+.signup-status { font-weight: 600; margin: 0.6rem 0 0; }
+.signup-status:empty { display: none; }
+.brief-article .signup-card { margin: 2rem 0 0; }
