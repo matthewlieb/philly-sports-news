@@ -5,10 +5,11 @@
   python -m shorts.run --team eagles --auto --publish      # what the hourly schedule runs (see below)
   python -m shorts.run --team eagles --script s.json       # re-render an existing script (e.g. another voice)
 
---auto decides what is due each hour:
+--auto decides what is due each run (every 30 minutes):
   morning   once today's brief exists (written ~7am ET) and today's morning video hasn't gone out
   postgame  4.5 to 20 hours after kickoff of a finished game that hasn't had one: refreshes today's
             brief with the recaps, then makes a result-first video
+  breaking  when neither is due: a major new development nobody has covered (see shorts/breaking.py)
 """
 import argparse
 import json
@@ -25,6 +26,7 @@ load_dotenv()
 from lib import briefs, store  # noqa: E402
 from lib.espn import hours_since, team_snapshot  # noqa: E402
 from lib.teams import TEAMS  # noqa: E402
+from shorts.photos import beat_photos  # noqa: E402
 from shorts.render import render  # noqa: E402
 from shorts.script import write_script  # noqa: E402
 from shorts.voice import narrate  # noqa: E402
@@ -43,9 +45,12 @@ def _recent_hooks(team: str, limit: int = 4) -> list[str]:
 
 
 def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapshot: dict | None = None,
-               script_path: str | None = None) -> tuple[Path, dict]:
+               script_path: str | None = None, breaking: str | None = None) -> tuple[Path, dict]:
     if script_path:
         script = json.loads(Path(script_path).read_text())
+    elif breaking:
+        script = write_script(team, None, snapshot if snapshot is not None else team_snapshot(team),
+                              recent_hooks=_recent_hooks(team), breaking=breaking)
     else:
         brief = briefs.get_brief(team, day)
         if not brief:
@@ -59,10 +64,15 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
     workdir = Path(tempfile.mkdtemp(prefix=f"short-{team}-"))
     voice, timeline = narrate(script["beats"], workdir)
     total = timeline[-1]["end"] + 0.6
-    label = "POSTGAME" if kind == "postgame" else "DAILY"
+    try:
+        pictures, script["photo_credits"] = beat_photos(script, team, workdir)
+    except Exception as e:
+        print(f"Photos unavailable, using footage only: {e}")
+        pictures, script["photo_credits"] = [], []
+    label = {"postgame": "POSTGAME", "breaking": "BREAKING"}.get(kind, "DAILY")
     tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
     out = out_dir / f"{team}-{day}-{kind}.mp4"
-    render(script, timeline, voice, total, team, tag, workdir, out)
+    render(script, timeline, voice, total, team, tag, workdir, out, pictures)
     print(f"Rendered {out} ({total:.1f}s)")
     return out, script
 
@@ -136,13 +146,36 @@ def main():
         if kind:
             _video(args, team, day, kind, snapshot)
         else:
-            print("No video due this hour.")
+            print("No scheduled video due now.")
         if social_ready:
             _carousels(team, day, snapshot, Path(args.out))
+            if not kind:
+                _breaking(args, team, day, snapshot)
         return
     if kind == "postgame":
         snapshot = team_snapshot(team)
     _video(args, team, day, kind, snapshot)
+
+
+def _breaking(args, team: str, day: str, snapshot: dict) -> None:
+    from shorts import breaking
+
+    try:
+        story = breaking.find_story(team, day)
+    except Exception as e:
+        print(f"Breaking check failed: {e}")
+        return
+    if not story:
+        return
+    posted_key = store.key("shorts", team, "breaking", story["slug"])
+    video, script = make_short(team, day, Path(args.out), "breaking", snapshot, breaking=story["material"])
+    store.client().set(store.key("shortscript", team, day, "breaking"), json.dumps(script), ex=30 * 86400)
+    from shorts.publish import publish_all
+    results = publish_all(video, script, team, day)
+    print(json.dumps(results, indent=1))
+    if any(r.get("id") for r in results.values()):
+        store.client().set(posted_key, json.dumps(results))
+        breaking.record(team, day, story)
 
 
 def _video(args, team: str, day: str, kind: str, snapshot: dict | None) -> None:

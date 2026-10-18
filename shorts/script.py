@@ -4,7 +4,9 @@ import os
 
 from openai import OpenAI
 
-from lib.espn import facts_text
+import re
+
+from lib.espn import facts_text, roster_names
 from lib.factcheck import check
 from lib.teams import TEAMS
 
@@ -29,12 +31,23 @@ On-screen cards: each beat may show one card that shows the same fact the beat i
 - "none": no card (use for the hook and the closing question)
 Card values must be short (max 20 characters) and must be facts stated in the material.
 
+Each beat also names "person": the full name of the one player or coach that beat is about, exactly as written in the
+material (their photo fills the screen), or "" when the beat isn't about one person. The hook should be about a person
+whenever the story is.
+
+On-screen hook (hook_text): 1 to 4 words, max 18 characters, shown huge over the photo for the first 2 seconds.
+It states the stakes, not a summary: "HURTS TO IR", "MCKEE STARTS", "TRADE SAQUON?", "2-3 AND SLIPPING", "NEW REPORT".
+A question mark only for a real open question or a rumor.
+
 Also write:
-- title: under 70 characters, curiosity + specific detail, ends with #Eagles style team hashtag. No clickbait lies.
+- title: under 70 characters. Lead with tension or stakes the way the best sports Shorts do ("Hurts to IR changes
+  everything for the Eagles", "Is this Sirianni's last chance?", "Why the Eagles keep losing late"), never a flat
+  status line like "Eagles at 2-3 with injury news". Start with "🚨" only for breaking news. Ends with the team
+  hashtag. No claims the material doesn't support.
 - caption: 1 to 2 sentences for the post description (no hashtags, no links).
 - hashtags: 3 to 5 relevant hashtags.
 
-Return JSON: {{"beats": [{{"say": "...", "card": {{"kind": "stat|matchup|text|none", "label": "", "value": "", "detail": ""}}}}], "hook_text": "max 7 words, the on-screen version of beat 1", "title": "...", "caption": "...", "hashtags": ["#..."]}}"""
+Return JSON: {{"beats": [{{"say": "...", "person": "", "card": {{"kind": "stat|matchup|text|none", "label": "", "value": "", "detail": ""}}}}], "hook_text": "1-4 words", "title": "...", "caption": "...", "hashtags": ["#..."]}}"""
 
 
 def _brief_block(brief: dict) -> str:
@@ -60,14 +73,25 @@ final score and stat leaders exactly (a "FINAL" matchup card and stat cards for 
 beat on what it means going forward, then the comment question."""
 
 
-def write_script(team: str, brief: dict, snapshot: dict, postgame: bool = False, recent_hooks: list[str] = ()) -> dict:
+_BREAKING = """
+
+This is a BREAKING NEWS video, posted within the hour of the news. The material is the fresh reporting on one story.
+The hook is the news itself, then why it matters for this week and the season, then the comment question. Attribute
+the news to the outlet or reporter that broke it ("per ESPN's Adam Schefter") when the material says who. The title
+starts with "🚨"."""
+
+
+def write_script(team: str, brief: dict | None, snapshot: dict, postgame: bool = False, recent_hooks: list[str] = (),
+                 breaking: str | None = None) -> dict:
+    """Script from today's brief, or (breaking) from the reporting on one breaking story."""
     t = TEAMS[team]
-    system = _SYSTEM.format(team=t["full_name"], name=t["name"]) + (_POSTGAME if postgame else "")
+    system = _SYSTEM.format(team=t["full_name"], name=t["name"]) + (_POSTGAME if postgame else "") + (_BREAKING if breaking else "")
     recent = ("\n\nRecent videos led with these; don't open the same way unless something new happened:\n"
               + "\n".join(f"- {h}" for h in recent_hooks)) if recent_hooks else ""
+    material = breaking or _brief_block(brief)
     messages = [
         {"role": "system", "content": system},
-        {"role": "user", "content": f"{_brief_block(brief)}\n\n{facts_text(snapshot)}{recent}"},
+        {"role": "user", "content": f"{material}\n\n{facts_text(snapshot)}{recent}"},
     ]
     for _ in range(2):
         resp = OpenAI().chat.completions.create(
@@ -98,9 +122,39 @@ def write_script(team: str, brief: dict, snapshot: dict, postgame: bool = False,
         else:
             b["card"] = {k: str(card.get(k) or "").strip()[:28] for k in ("kind", "label", "value", "detail")}
             b["card"]["detail"] = str(card.get("detail") or "").strip()[:48]
+    evidence = f"{material}\n\n{facts_text(snapshot)}"
+    roster = roster_names(team)
+    for b in beats:
+        # Only people the material actually names, so a photo can never be of someone the story isn't about.
+        person = " ".join(str(b.get("person") or "").split())
+        b["person"] = person if len(person.split()) >= 2 and person.lower() in evidence.lower() else ""
     script["beats"] = beats
     script["hook_text"] = _clean(script.get("hook_text") or beats[0]["say"]).rstrip(",")
-    return _fact_checked(script, f"{_brief_block(brief)}\n\n{facts_text(snapshot)}")
+    script = _fact_checked(script, evidence)
+    # People the material names in full; a line may then refer to them by last name alone.
+    roster = [n for n in roster if n.lower() in evidence.lower()]
+    for b in script["beats"]:
+        tagged = [b["person"]] if b["person"] and named_people(b["say"], [b["person"]]) else []
+        b["person"] = (tagged or named_people(b["say"], roster) or [""])[0]
+    script["hook_person"] = (named_people(script["hook_text"], roster) or [""])[0]
+    return script
+
+
+def named_people(text: str, roster: list[str]) -> list[str]:
+    """Roster members a line mentions, by full name or by a last name only one of them has, in order of mention.
+    Pass only the people the source material names in full, so "Brown" can't match the wrong Brown."""
+    last_counts: dict[str, int] = {}
+    for name in roster:
+        last = name.split()[-1].lower()
+        last_counts[last] = last_counts.get(last, 0) + 1
+    hits = []
+    for name in roster:
+        last = name.split()[-1]
+        full = re.search(re.escape(name), text, re.I)
+        by_last = len(last) >= 4 and last_counts[last.lower()] == 1 and re.search(rf"\b{re.escape(last)}\b", text, re.I)
+        if m := full or by_last:
+            hits.append((m.start(), name))
+    return [n for _, n in sorted(hits)]
 
 
 def _fact_checked(script: dict, evidence: str) -> dict:

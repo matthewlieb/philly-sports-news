@@ -119,23 +119,64 @@ def hook(text: str, team: str) -> Image.Image:
     return _shadowed(img)
 
 
+def photo_frame(photo: Image.Image, team: str) -> Image.Image:
+    """A 1080x1920 photo darkened top (brand tag) and from mid-frame down (hook words, cards, captions),
+    with a thin team-color wash so every video still looks like ours."""
+    img = photo.convert("RGB").resize((W, H))
+    shade = Image.new("L", (W, H), 0)
+    d = ImageDraw.Draw(shade)
+    for y in range(H):
+        if y < 300:
+            a = int(110 * (1 - y / 300))
+        elif y < 780:
+            a = 0
+        else:
+            a = min(225, int(225 * ((y - 780) / 600) ** 0.8))
+        d.line([(0, y), (W, y)], fill=a)
+    img = Image.composite(Image.new("RGB", (W, H), (0, 0, 0)), img, shade)
+    wash = Image.new("RGB", (W, H), THEMES[team]["dark"])
+    return Image.blend(img, wash, 0.12)
+
+
+def big_hook(text: str, team: str) -> Image.Image:
+    """The 1-4 word opener over a photo: as large as fits in two lines, last line in the team accent."""
+    theme = THEMES[team]
+    font, lines = _fit_display(text.upper(), 1000, 2, 230, 120)
+    line_h = int(_line_height(font) * 1.04)
+    img = Image.new("RGBA", (W, line_h * len(lines) + 60), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for i, line in enumerate(lines):
+        color = theme["accent"] if i == len(lines) - 1 and len(lines) > 1 else (255, 255, 255)
+        d.text((W // 2, i * line_h), line, font=font, fill=color, anchor="mt", stroke_width=8, stroke_fill=(0, 0, 0))
+    return _shadowed(img, radius=22, opacity=200)
+
+
+def url_tag(text: str) -> Image.Image:
+    font = _sans(40, 800)
+    img = Image.new("RGBA", (W, 70), (0, 0, 0, 0))
+    ImageDraw.Draw(img).text((W // 2, 35), text, font=font, fill=(255, 255, 255), anchor="mm",
+                             stroke_width=4, stroke_fill=(0, 0, 0))
+    return img
+
+
 MAX_CARD_HEIGHT = 600
 
 
-def card(c: dict, team: str) -> Image.Image:
-    """Label, big value, optional detail. Never taller than MAX_CARD_HEIGHT, so it can't reach the captions."""
+def card(c: dict, team: str, max_height: int = MAX_CARD_HEIGHT) -> Image.Image:
+    """Label, big value, optional detail. Never taller than max_height, so it can't reach the captions."""
     theme = THEMES[team]
     pw, pad = 900, 48
     label_font = _sans(42, 800)
     detail_font = _sans(44, 700)
-    detail_lines = _wrap(c.get("detail") or "", detail_font, pw - pad * 2)[:2] if c.get("detail") else []
+    detail_lines = (_wrap(c.get("detail") or "", detail_font, pw - pad * 2)[:2 if max_height >= 500 else 1]
+                    if c.get("detail") else [])
     start = 230
     while True:
         value_font, value_lines = _fit_display(c["value"].upper(), pw - pad * 2, 2, start, 90)
         value_line_h = int(_line_height(value_font) * 1.08)
         value_h = value_line_h * len(value_lines)
         ph = pad + 50 + 20 + value_h + (24 + 56 * len(detail_lines) if detail_lines else 0) + pad
-        if ph <= MAX_CARD_HEIGHT or value_font.size <= 90:
+        if ph <= max_height or value_font.size <= 90:
             break
         start = value_font.size - 10
     img = Image.new("RGBA", (W, ph + 40), (0, 0, 0, 0))

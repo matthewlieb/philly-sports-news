@@ -196,21 +196,25 @@ def rss_to_article_lists(articles: List[dict]) -> Tuple[List[str], List[str], Li
 # Try multiple URLs in order of preference
 RSS_FEEDS = {
     'liberty_ballers': [
+        'https://www.libertyballers.com/rss/index.xml',
         'https://www.libertyballers.com/rss/current',
         'https://www.libertyballers.com/feed',
         'https://www.libertyballers.com/rss',
     ],
     'bleeding_green_nation': [
+        'https://www.bleedinggreennation.com/rss/index.xml',
         'https://www.bleedinggreennation.com/rss/current',
         'https://www.bleedinggreennation.com/feed',
         'https://www.bleedinggreennation.com/rss',
     ],
     'the_good_phight': [
+        'https://www.thegoodphight.com/rss/index.xml',
         'https://www.thegoodphight.com/rss/current',
         'https://www.thegoodphight.com/feed',
         'https://www.thegoodphight.com/rss',
     ],
     'broad_street_hockey': [
+        'https://www.broadstreethockey.com/rss/index.xml',
         'https://www.broadstreethockey.com/rss/current',
         'https://www.broadstreethockey.com/feed',
         'https://www.broadstreethockey.com/rss',

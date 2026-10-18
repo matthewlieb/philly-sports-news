@@ -104,6 +104,22 @@ def team_snapshot(team: str) -> dict:
     }
 
 
+def roster_names(team: str) -> list[str]:
+    """Full names of the current roster (including injured reserve and practice squad) and the head coach."""
+    try:
+        data = _get(f"{_BASE}/{_SPORTS[team]}/teams/phi/roster")
+    except Exception as e:
+        print(f"ESPN roster lookup failed: {e}")
+        return []
+    athletes = data.get("athletes") or []
+    if athletes and "items" in athletes[0]:
+        athletes = [a for group in athletes for a in group.get("items", [])]
+    names = [a.get("fullName") or a.get("displayName") for a in athletes]
+    for c in data.get("coach") or []:
+        names.append(f"{c.get('firstName', '')} {c.get('lastName', '')}".strip())
+    return [n for n in names if n]
+
+
 def hours_since(iso: str) -> float:
     return (datetime.now(timezone.utc) - datetime.fromisoformat(iso)).total_seconds() / 3600
 

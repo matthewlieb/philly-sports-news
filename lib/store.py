@@ -33,6 +33,29 @@ class _MemoryStore:
         self._expires[key] = time.time() + ex if ex else None
         return True
 
+    def sismember(self, key, member):
+        return member in (self._data.get(key) or set())
+
+    def sadd(self, key, *members):
+        self._data.setdefault(key, set()).update(members)
+
+    def lrange(self, key, start, end):
+        items = self._data.get(key) or []
+        return items[start:None if end == -1 else end + 1]
+
+    def llen(self, key):
+        return len(self._data.get(key) or [])
+
+    def rpush(self, key, *values):
+        self._data.setdefault(key, []).extend(values)
+
+    def lpush(self, key, *values):
+        for v in values:
+            self._data.setdefault(key, []).insert(0, v)
+
+    def ltrim(self, key, start, end):
+        self._data[key] = self.lrange(key, start, end)
+
     def mget(self, keys):
         return [self.get(k) for k in keys]
 

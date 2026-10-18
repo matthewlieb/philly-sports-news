@@ -29,6 +29,7 @@ def _texts(script: dict, team: str, day: str) -> tuple[str, str, list[str]]:
         f"{script.get('caption', '').strip()}\n\n"
         f"Full {TEAMS[team]['name']} brief with sources: {brief_url(team, day)}\n\n"
         f"Facts from the reporting linked in the brief. Narration is AI-generated.\n\n"
+        + (f"Photos: {'; '.join(script['photo_credits'])}\n\n" if script.get("photo_credits") else "")
         + " ".join(hashtags)
     )
     return title, description, hashtags
@@ -228,6 +229,18 @@ def upload_threads(video: Path, text: str) -> dict:
     return {"id": pub["id"], "url": link.get("permalink")}
 
 
+def _retrying(upload, attempts: int = 3):
+    """Retry on dropped connections and timeouts (Facebook's upload host drops some), not on API errors."""
+    for attempt in range(attempts):
+        try:
+            return upload()
+        except (requests.ConnectionError, requests.Timeout) as e:
+            if attempt == attempts - 1:
+                raise
+            print(f"Upload interrupted ({e}); retrying.")
+            time.sleep(20 * (attempt + 1))
+
+
 def publish_all(video: Path, script: dict, team: str, day: str) -> dict:
     privacy = os.environ.get("SHORTS_PRIVACY", "private")
     title, description, hashtags = _texts(script, team, day)
@@ -240,7 +253,7 @@ def publish_all(video: Path, script: dict, team: str, day: str) -> dict:
     if privacy != "public":
         return results
     social = [("instagram", "IG_USER_ID", lambda: upload_instagram(video, description)),
-              ("facebook", "FB_PAGE_ID", lambda: upload_facebook_reel(video, description)),
+              ("facebook", "FB_PAGE_ID", lambda: _retrying(lambda: upload_facebook_reel(video, description))),
               ("threads", "THREADS_USER_ID", lambda: upload_threads(video, f"{script.get('caption', '')} {' '.join(hashtags[:2])}\n\nFull brief: {brief_url(team, day)}"))]
     for name, env, upload in social:
         if os.environ.get(env):
