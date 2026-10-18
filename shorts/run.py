@@ -10,6 +10,7 @@
   postgame  4.5 to 20 hours after kickoff of a finished game that hasn't had one: refreshes today's
             brief with the recaps, then makes a result-first video
   breaking  when neither is due: a major new development nobody has covered (see shorts/breaking.py)
+  quiz      Thursdays from noon ET: three verified trivia questions (see shorts/quiz.py)
 """
 import argparse
 import json
@@ -45,8 +46,10 @@ def _recent_hooks(team: str, limit: int = 4) -> list[str]:
 
 
 def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapshot: dict | None = None,
-               script_path: str | None = None, breaking: str | None = None) -> tuple[Path, dict]:
-    if script_path:
+               script_path: str | None = None, breaking: str | None = None, script: dict | None = None) -> tuple[Path, dict]:
+    if script:
+        pass
+    elif script_path:
         script = json.loads(Path(script_path).read_text())
     elif breaking:
         script = write_script(team, None, snapshot if snapshot is not None else team_snapshot(team),
@@ -69,7 +72,7 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
     except Exception as e:
         print(f"Photos unavailable, using footage only: {e}")
         pictures, script["photo_credits"] = [], []
-    label = {"postgame": "POSTGAME", "breaking": "BREAKING"}.get(kind, "DAILY")
+    label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA"}.get(kind, "DAILY")
     tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
     out = out_dir / f"{team}-{day}-{kind}.mp4"
     render(script, timeline, voice, total, team, tag, workdir, out, pictures)
@@ -151,10 +154,38 @@ def main():
             _carousels(team, day, snapshot, Path(args.out))
             if not kind:
                 _breaking(args, team, day, snapshot)
+            if not kind:
+                _quiz(args, team, day)
         return
     if kind == "postgame":
         snapshot = team_snapshot(team)
     _video(args, team, day, kind, snapshot)
+
+
+QUIZ_WEEKDAY, QUIZ_HOUR = 3, 12  # Thursdays from noon ET
+
+
+def _quiz(args, team: str, day: str, force: bool = False) -> None:
+    from shorts import quiz
+
+    now = datetime.now(briefs.EASTERN)
+    week = now.strftime("%G-W%V")
+    posted_key = store.key("shorts", team, "quiz", week)
+    if not force and (now.weekday() != QUIZ_WEEKDAY or now.hour < QUIZ_HOUR or store.client().get(posted_key)):
+        return
+    questions = quiz.pick_questions(team, week)
+    if len(questions) < 3:
+        print(f"Only {len(questions)} verified trivia questions; skipping this week's quiz.")
+        return
+    video, script = make_short(team, day, Path(args.out), "quiz", script=quiz.build_script(team, questions))
+    if not args.publish:
+        return
+    from shorts.publish import publish_all
+    results = publish_all(video, script, team, day)
+    print(json.dumps(results, indent=1))
+    if any(r.get("id") for r in results.values()):
+        store.client().set(posted_key, json.dumps(results))
+        quiz.record(team, script)
 
 
 def _breaking(args, team: str, day: str, snapshot: dict) -> None:

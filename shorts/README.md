@@ -16,6 +16,24 @@ word-by-word captions for muted viewing, a closing question that drives comments
 Every fact must come from the brief or ESPN, and each video's substance changes daily (YouTube does not
 monetize templated, repetitive uploads). No game footage, player images or team logos are used.
 
+## Photos
+
+Beats about a player or coach show their photo (slow push-in, face framed); other beats use stadium footage.
+Photos come from, in order:
+
+1. **Our own or licensed photos** in the media bucket under `photos/<name-slug>/`, e.g. `photos/tanner-mckee/1.jpg`.
+   Add `photos/<name-slug>/credit.txt` if the license needs a credit line. These always win.
+2. **Wikimedia Commons**: Wikidata's main photo of the person, plus Commons files named after them alone.
+   Only CC0, public domain, CC BY and CC BY-SA files are used, and every credit goes in the description.
+
+Never use photos from team sites, Getty/AP/Imagn, or game footage without a license: editing a photo doesn't
+change who owns it, and NFL footage gets Content ID claims and strikes.
+
+## Breaking news
+
+Every 30 minutes (8am-11pm ET) `shorts/breaking.py` reads headlines it hasn't seen; a major new development
+(injury status, trade, signing/release, QB or coach change, suspension) gets its own video, at most two a day.
+
 ## Run
 
 ```bash

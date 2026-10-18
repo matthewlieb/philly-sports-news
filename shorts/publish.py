@@ -17,7 +17,7 @@ from pathlib import Path
 import requests
 
 from lib import store
-from lib.teams import TEAMS, brief_url
+from lib.teams import TEAMS, brief_url, team_url
 
 _IG_GRAPH = f"https://graph.instagram.com/{os.environ.get('IG_API_VERSION', 'v23.0')}"
 
@@ -25,6 +25,16 @@ _IG_GRAPH = f"https://graph.instagram.com/{os.environ.get('IG_API_VERSION', 'v23
 def _texts(script: dict, team: str, day: str) -> tuple[str, str, list[str]]:
     hashtags = [h if h.startswith("#") else f"#{h}" for h in script.get("hashtags") or []][:5]
     title = script["title"].strip()[:100]
+    if script.get("kind") == "quiz":
+        description = (
+            f"{script.get('caption', '').strip()}\n\n"
+            f"Answers checked against: {' '.join(script.get('sources') or [])}\n"
+            f"Daily {TEAMS[team]['name']} news: {team_url(team)}\n\n"
+            "Narration is AI-generated.\n\n"
+            + (f"Photos: {'; '.join(script['photo_credits'])}\n\n" if script.get("photo_credits") else "")
+            + " ".join(hashtags)
+        )
+        return title, description, hashtags
     description = (
         f"{script.get('caption', '').strip()}\n\n"
         f"Full {TEAMS[team]['name']} brief with sources: {brief_url(team, day)}\n\n"

@@ -232,7 +232,7 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
     if hook_person:
         found[hook_person] = find(hook_person, team)
         people[0] = hook_person if found[hook_person] else ""
-    elif not people[0]:
+    elif not people[0] and script.get("kind") != "quiz":  # a quiz opener would spoil an answer
         people[0] = next((p for p in people if p and (found.setdefault(p, find(p, team)))), "")
     people[-1] = "" if len(beats) > 2 else people[-1]
     used: dict[str, int] = {}

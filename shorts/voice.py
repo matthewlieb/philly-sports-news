@@ -71,9 +71,19 @@ def align(script_words: list[str], heard: list[dict], total: float) -> list[tupl
     return out
 
 
+def _ticks(seconds: int, path: Path) -> None:
+    """A quiet countdown: one short tick at the top of each second."""
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                    "sine=f=1400:d=0.07,volume=0.25,apad=pad_dur=0.93", "-t", "1", "-ar", "44100", "-ac", "1",
+                    str(path.with_suffix(".one.wav"))], check=True)
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-stream_loop", str(seconds - 1), "-i",
+                    str(path.with_suffix(".one.wav")), "-t", str(seconds), str(path)], check=True)
+
+
 def narrate(beats: list[dict], workdir: Path) -> tuple[Path, list[dict]]:
     """Synthesize every beat, join them, and return the audio plus per-beat timings:
-    [{"start", "end", "words": [(word, start, end), ...]}] in seconds on the final timeline."""
+    [{"start", "end", "words": [(word, start, end), ...], "countdown": seconds}] on the final timeline.
+    A beat with "countdown": n is followed by n seconds of ticks before the next beat (quiz questions)."""
     provider = os.environ.get("VOICE_PROVIDER", "openai").lower()
     tts = _tts_elevenlabs if provider == "elevenlabs" else _tts_openai
     tempo = float(os.environ.get("VOICE_TEMPO", "1.18"))
@@ -90,10 +100,16 @@ def narrate(beats: list[dict], workdir: Path) -> tuple[Path, list[dict]]:
         d = duration(wav)
         words = beat["say"].split()
         times = align(words, _whisper_words(wav), d)
-        timeline.append({"start": t, "end": t + d,
+        countdown = int(beat.get("countdown") or 0)
+        timeline.append({"start": t, "end": t + d, "countdown": countdown,
                          "words": [(w, t + s, t + e) for w, (s, e) in zip(words, times)]})
         wavs += [wav, silence]
         t += d + gap
+        if countdown:
+            ticks = workdir / f"ticks{i}.wav"
+            _ticks(countdown, ticks)
+            wavs += [ticks, silence]
+            t += countdown + gap
 
     concat_list = workdir / "voice.txt"
     concat_list.write_text("".join(f"file '{w.name}'\n" for w in wavs[:-1]))

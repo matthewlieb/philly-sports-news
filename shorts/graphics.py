@@ -241,3 +241,42 @@ def scaled(img: Image.Image, factor: float) -> Image.Image:
     out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     out.alpha_composite(s, ((w - s.width) // 2, (h - s.height) // 2))
     return out
+
+
+def question_card(label: str, text: str, team: str) -> Image.Image:
+    """A quiz question: small label, then the question in bold sans, up to 4 lines."""
+    theme = THEMES[team]
+    pw, pad = 940, 50
+    label_font = _sans(42, 800)
+    size = 76
+    while True:
+        font = _sans(size, 800)
+        lines = _wrap(text, font, pw - pad * 2)
+        if len(lines) <= 4 or size <= 52:
+            break
+        size -= 4
+    line_h = int(_line_height(font) * 1.22)
+    ph = pad + 50 + 24 + line_h * len(lines) + pad
+    img = Image.new("RGBA", (W, ph + 40), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    x0 = (W - pw) // 2
+    d.rounded_rectangle([x0, 0, x0 + pw, ph], radius=36, fill=(*theme["dark"], 240))
+    d.rounded_rectangle([x0, 0, x0 + pw, 14], radius=7, fill=(*theme["accent"], 255))
+    d.text((x0 + pad, pad + 4), label.upper(), font=label_font, fill=theme["accent"])
+    y = pad + 50 + 24
+    for line in lines:
+        d.text((x0 + pad, y), line, font=font, fill=(255, 255, 255), anchor="lt")
+        y += line_h
+    return _shadowed(img, radius=24, opacity=170)
+
+
+def countdown(n: int, team: str) -> Image.Image:
+    """The big number in a ring shown while viewers think."""
+    theme = THEMES[team]
+    size = 230
+    img = Image.new("RGBA", (W, size + 40), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    x0 = (W - size) // 2
+    d.ellipse([x0, 0, x0 + size, size], fill=(*theme["dark"], 235), outline=(*theme["accent"], 255), width=14)
+    d.text((W // 2, size // 2 + 6), str(n), font=_display(150), fill=(255, 255, 255), anchor="mm")
+    return _shadowed(img, radius=16, opacity=180)

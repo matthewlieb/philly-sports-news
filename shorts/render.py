@@ -81,8 +81,17 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
         hook = (big, max(_PHOTO_HOOK_TOP, _CAPTION_Y - 20 - big.height))
     else:
         hook = (g.hook(script["hook_text"], team), _MIDDLE_Y)
-    cards = {i: (g.card(b["card"], team, _PHOTO_CARD_MAX), _PHOTO_CARD_Y) if has_photo[i] else (g.card(b["card"], team), _MIDDLE_Y)
-             for i, b in enumerate(script["beats"]) if b.get("card")}
+    cards = {}
+    for i, b in enumerate(script["beats"]):
+        c = b.get("card")
+        if not c:
+            continue
+        if c.get("kind") == "question":
+            cards[i] = (g.question_card(c.get("label") or "", c["value"], team), _MIDDLE_Y)
+        elif has_photo[i]:
+            cards[i] = (g.card(c, team, _PHOTO_CARD_MAX), _PHOTO_CARD_Y)
+        else:
+            cards[i] = (g.card(c, team), _MIDDLE_Y)
     url = g.url_tag(SITE_URL.removeprefix("https://").removeprefix("www."))
     chunks = [_chunks(beat["words"]) for beat in timeline]
 
@@ -90,6 +99,8 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
     for beat in timeline:
         times.update(beat["start"] + dt for dt, _ in _POP)
         times.update(s for _, s, _ in beat["words"])
+        times.update(beat["end"] + 0.12 + k for k in range(beat.get("countdown") or 0))
+    numbers = {}
     times = sorted(t for t in times if 0 <= t < total)
 
     caption_cache = {}
@@ -111,13 +122,20 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
         if bi == len(timeline) - 1:
             frame.alpha_composite(url, (0, _URL_Y))
 
-        spoken = [i for i, (_, s, _) in enumerate(beat["words"]) if s <= a + 1e-6]
-        active = spoken[-1] if spoken else 0
-        chunk = next(c for c in chunks[bi] if active in c)
-        key = (bi, tuple(chunk), active)
-        if key not in caption_cache:
-            caption_cache[key] = g.caption([beat["words"][i][0] for i in chunk], chunk.index(active), team)
-        frame.alpha_composite(caption_cache[key], (0, _CAPTION_Y))
+        thinking = beat.get("countdown") and a >= beat["end"] + 0.12 - 1e-6
+        if thinking:
+            left = max(1, beat["countdown"] - int(a - beat["end"] - 0.12 + 1e-6))
+            if left not in numbers:
+                numbers[left] = g.countdown(left, team)
+            frame.alpha_composite(numbers[left], (0, _CAPTION_Y))
+        else:
+            spoken = [i for i, (_, s, _) in enumerate(beat["words"]) if s <= a + 1e-6]
+            active = spoken[-1] if spoken else 0
+            chunk = next(c for c in chunks[bi] if active in c)
+            key = (bi, tuple(chunk), active)
+            if key not in caption_cache:
+                caption_cache[key] = g.caption([beat["words"][i][0] for i in chunk], chunk.index(active), team)
+            frame.alpha_composite(caption_cache[key], (0, _CAPTION_Y))
 
         name = f"f{n:04d}.png"
         frame.save(frames_dir / name, compress_level=1)
