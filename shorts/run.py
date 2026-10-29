@@ -30,6 +30,7 @@ from lib.teams import TEAMS  # noqa: E402
 from shorts.photos import beat_photos  # noqa: E402
 from shorts.render import render  # noqa: E402
 from shorts.script import write_script  # noqa: E402
+from shorts.host import HOSTS  # noqa: E402
 from shorts.voice import narrate  # noqa: E402
 
 POSTGAME_WINDOW_HOURS = (4.5, 20)
@@ -47,7 +48,9 @@ def _recent_hooks(team: str, limit: int = 4) -> list[str]:
 
 
 def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapshot: dict | None = None,
-               script_path: str | None = None, breaking: str | None = None, script: dict | None = None) -> tuple[Path, dict]:
+               script_path: str | None = None, breaking: str | None = None, script: dict | None = None,
+               host: str | None = None) -> tuple[Path, dict]:
+    host = host or os.environ.get("SHORTS_HOST") or None
     if script:
         pass
     elif script_path:
@@ -66,7 +69,7 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
     (out_dir / f"{team}-{day}-{kind}.json").write_text(json.dumps(script, indent=1))
 
     workdir = Path(tempfile.mkdtemp(prefix=f"short-{team}-"))
-    voice, timeline = narrate(script["beats"], workdir)
+    voice, timeline = narrate(script["beats"], workdir, HOSTS.get(host))
     total = timeline[-1]["end"] + 0.6
     try:
         pictures, script["photo_credits"] = beat_photos(script, team, workdir)
@@ -75,8 +78,8 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
         pictures, script["photo_credits"] = [], []
     label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA"}.get(kind, "DAILY")
     tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
-    out = out_dir / f"{team}-{day}-{kind}.mp4"
-    render(script, timeline, voice, total, team, tag, workdir, out, pictures)
+    out = out_dir / f"{team}-{day}-{kind}{'-' + host if host else ''}.mp4"
+    render(script, timeline, voice, total, team, tag, workdir, out, pictures, host=host)
     print(f"Rendered {out} ({total:.1f}s)")
     return out, script
 
@@ -138,7 +141,11 @@ def main():
     p.add_argument("--publish", action="store_true")
     p.add_argument("--out", default=".")
     p.add_argument("--script", default=None, help="reuse a script JSON instead of writing a new one")
+    p.add_argument("--host", default=None, choices=list(HOSTS), help="put an animated host under the photo "
+                   "(default: SHORTS_HOST)")
     args = p.parse_args()
+    if args.host:
+        os.environ["SHORTS_HOST"] = args.host
     day = args.date or briefs.local_today()
     team, kind, snapshot = args.team, args.kind, None
 

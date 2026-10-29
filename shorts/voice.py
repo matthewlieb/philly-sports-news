@@ -17,18 +17,19 @@ _OPENAI_INSTRUCTIONS = (
 )
 
 
-def _tts_openai(text: str, path: Path) -> None:
+def _tts_openai(text: str, path: Path, persona: dict | None = None) -> None:
+    persona = persona or {}
     with OpenAI().audio.speech.with_streaming_response.create(
-        model=os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
-        voice=os.environ.get("OPENAI_TTS_VOICE", "ash"),
+        model=persona.get("model") or os.environ.get("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+        voice=persona.get("voice") or os.environ.get("OPENAI_TTS_VOICE", "ash"),
         input=text,
-        instructions=_OPENAI_INSTRUCTIONS,
+        instructions=persona.get("instructions") or _OPENAI_INSTRUCTIONS,
         response_format="mp3",
     ) as resp:
         resp.stream_to_file(path)
 
 
-def _tts_elevenlabs(text: str, path: Path) -> None:
+def _tts_elevenlabs(text: str, path: Path, persona: dict | None = None) -> None:
     voice_id = os.environ["ELEVENLABS_VOICE_ID"]
     resp = requests.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
@@ -80,10 +81,11 @@ def _ticks(seconds: int, path: Path) -> None:
                     str(path.with_suffix(".one.wav")), "-t", str(seconds), str(path)], check=True)
 
 
-def narrate(beats: list[dict], workdir: Path) -> tuple[Path, list[dict]]:
+def narrate(beats: list[dict], workdir: Path, persona: dict | None = None) -> tuple[Path, list[dict]]:
     """Synthesize every beat, join them, and return the audio plus per-beat timings:
     [{"start", "end", "words": [(word, start, end), ...], "countdown": seconds}] on the final timeline.
-    A beat with "countdown": n is followed by n seconds of ticks before the next beat (quiz questions)."""
+    A beat with "countdown": n is followed by n seconds of ticks before the next beat (quiz questions).
+    persona: optional OpenAI {"voice", "instructions", "model"} for an on-screen host."""
     provider = os.environ.get("VOICE_PROVIDER", "openai").lower()
     tts = _tts_elevenlabs if provider == "elevenlabs" else _tts_openai
     tempo = float(os.environ.get("VOICE_TEMPO", "1.18"))
@@ -94,7 +96,7 @@ def narrate(beats: list[dict], workdir: Path) -> tuple[Path, list[dict]]:
                     "-t", str(gap), str(silence)], check=True)
     for i, beat in enumerate(beats):
         mp3, wav = workdir / f"beat{i}.mp3", workdir / f"beat{i}.wav"
-        tts(for_speech(beat["say"]), mp3)
+        tts(for_speech(beat["say"]), mp3, persona)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-af", f"atempo={tempo}",
                         "-ar", "44100", "-ac", "1", str(wav)], check=True)
         d = duration(wav)
