@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_signup.html" import signup %}
+{% from "_signup.html" import signup_band with context %}
 
 {% block title %}{{ team.name }} News Today: Latest {{ team.full_name }} Headlines | {{ site_name }}{% endblock %}
 {% block description %}The latest {{ team.full_name }} news from Philly's best outlets in one place, plus an original daily {{ team.name }} brief. Updated hourly.{% endblock %}
@@ -45,6 +45,8 @@
     <h1>{{ team.full_name }} News</h1>
     <p class="lede">Today's {{ team.name }} headlines from around Philadelphia, ranked and updated hourly.</p>
   </header>
+  {% if team.slug == "eagles" %}{{ signup_band("eagles-top") }}
+  {% else %}{{ signup_band(team.slug ~ "-top", text="The Eagles brief every morning, plus the day's " ~ team.name ~ " headline. Free.") }}{% endif %}
 
   <div class="row main-row">
     <div class="col-lg-8">
@@ -79,8 +81,6 @@
         </div>
       </section>
       {% endif %}
-
-      {{ signup(team.slug ~ "-sidebar") }}
 
       <script>
         sbd_odds('display', {"team": "PHI", "league": "{{ team.league }}", "show_concensus": true, "show_predictions": true,

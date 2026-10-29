@@ -129,3 +129,7 @@ a { color: var(--team-dark); }
 .signup-status { font-weight: 600; margin: 0.6rem 0 0; }
 .signup-status:empty { display: none; }
 .brief-article .signup-card { margin: 2rem 0 0; }
+
+.signup-band { background: #f8fafb; border-left: 4px solid var(--team-dark); border-radius: 8px; padding: 12px 16px; margin: 0 0 1.25rem; }
+.signup-band p { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.signup-band .signup-status { margin: 0.5rem 0 0; }

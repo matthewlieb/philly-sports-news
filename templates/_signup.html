@@ -16,3 +16,19 @@
 </section>
 {% endif %}
 {% endmacro %}
+
+{% macro signup_band(source, text="Get the Eagles news that matters in your inbox every morning. Free, two-minute read.") %}
+{% if newsletter_on %}
+<section class="signup-band">
+  <p><strong>Daily email:</strong> {{ text }}</p>
+  <form class="signup-form" action="/subscribe" method="post">
+    <label class="sr-only" for="email-{{ source }}">Email address</label>
+    <input id="email-{{ source }}" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+    <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+    <input type="hidden" name="source" value="{{ source }}">
+    <button type="submit">Sign up</button>
+  </form>
+  <p class="signup-status" role="status" aria-live="polite"></p>
+</section>
+{% endif %}
+{% endmacro %}

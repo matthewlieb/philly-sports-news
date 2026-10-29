@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_signup.html" import signup %}
+{% from "_signup.html" import signup, signup_band with context %}
 
 {% block title %}{{ brief.headline }} | {{ team.name }} Daily Brief {{ brief.date }}{% endblock %}
 {% block description %}{{ brief.summary | truncate(155) }}{% endblock %}
@@ -31,6 +31,7 @@
       <p class="eyebrow"><a href="/{{ team.slug }}/briefs">{{ team.name }} Daily Brief</a> · <time datetime="{{ brief.date }}">{{ brief.date }}</time></p>
       <h1>{{ brief.headline }}</h1>
       <p class="brief-summary">{{ brief.summary }}</p>
+      {{ signup_band("brief-top-" ~ team.slug, text="Get this brief in your inbox every morning. Free.") }}
 
       {% for section in brief.sections %}
       <section class="brief-section">

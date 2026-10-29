@@ -33,6 +33,7 @@ from shorts.script import write_script  # noqa: E402
 from shorts.voice import narrate  # noqa: E402
 
 POSTGAME_WINDOW_HOURS = (4.5, 20)
+MORNING_HOUR = 7  # a postgame brief refresh after a night game must not trigger the morning video at 1am
 
 
 def _recent_hooks(team: str, limit: int = 4) -> list[str]:
@@ -88,7 +89,8 @@ def _due(team: str, day: str) -> tuple[str | None, dict]:
     if game and game["completed"] and POSTGAME_WINDOW_HOURS[0] <= hours_since(game["kickoff_utc"]) <= POSTGAME_WINDOW_HOURS[1]:
         if not r.get(store.key("shorts", team, "postgame", game["id"])):
             return "postgame", snapshot
-    if briefs.get_brief(team, day) and not r.get(store.key("shorts", team, day)):
+    if (datetime.now(briefs.EASTERN).hour >= MORNING_HOUR and briefs.get_brief(team, day)
+            and not r.get(store.key("shorts", team, day))):
         return "morning", snapshot
     return None, snapshot
 
