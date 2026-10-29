@@ -1,4 +1,4 @@
-"""Background footage: hand-picked, team-neutral Pexels stadium/crowd clips (Pexels license: free, no attribution
+"""Background footage: hand-picked, team-neutral Pexels stadium/crowd and Philadelphia city clips (Pexels license: free, no attribution
 required). They sit under a heavy team-color tint, so they read as atmosphere rather than a specific game."""
 import os
 import random
@@ -7,7 +7,9 @@ from pathlib import Path
 import requests
 
 # Night stadiums, aerials and crowds. Picked to avoid visible soccer play and identifiable people.
-CLIP_IDS = [35970540, 35970584, 35970583, 30398376, 34561857, 34452578, 29250674, 16469399, 32337290, 34561859]
+STADIUM_IDS = [35970540, 35970584, 35970583, 30398376, 34561857, 34452578, 29250674, 16469399, 32337290, 34561859]
+# Philadelphia: skyline at dusk and night, City Hall, Broad Street, aerials. No holiday lights, no faces.
+PHILLY_IDS = [13082932, 37261867, 37261869, 33295883, 35192564, 37258796, 37261868, 37258675, 13674919, 13687405, 37104317]
 CACHE = Path(os.environ.get("SHORTS_CACHE", "/tmp/psd-shorts-cache"))
 
 
@@ -36,8 +38,11 @@ def pick_clips(count: int, seed: str) -> list[Path]:
     key = os.environ.get("PEXELS_API_KEY")
     if not key:
         return []
-    ids = CLIP_IDS[:]
-    random.Random(seed).shuffle(ids)
+    rnd = random.Random(seed)
+    stadium, philly = STADIUM_IDS[:], PHILLY_IDS[:]
+    rnd.shuffle(stadium)
+    rnd.shuffle(philly)
+    ids = [i for pair in zip(stadium, philly) for i in pair]  # alternate game atmosphere and the city
     clips = []
     for clip_id in ids:
         if len(clips) == count:
