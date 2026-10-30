@@ -106,7 +106,7 @@ def render_host(name: str, audio: Path, total: float, out: Path, seed: str = "")
     rnd = random.Random(seed)
     frames = math.ceil(total * FPS)
     level = _loudness(audio, frames)
-    smooth = np.convolve(level, np.ones(9) / 9, mode="same")  # slower envelope for body motion
+    smooth = np.convolve(level, np.ones(15) / 15, mode="same")  # slow envelope so the body drifts, never jerks
     mouths, blinks = _mouths(level, rnd), _blinks(frames, rnd)
     poses = _poses(name)
     fx, fy = (c * host["scale"] for c in host["face"])
@@ -119,10 +119,11 @@ def render_host(name: str, audio: Path, total: float, out: Path, seed: str = "")
     for i in range(frames):
         t = i / FPS
         e = float(smooth[i])
-        angle = 1.6 * math.sin(t * 2 * math.pi / 4.1 + phase) + 2.2 * e * math.sin(t * 1.3 + phase)
-        dx = 10 * math.sin(t * 2 * math.pi / 3.3 + phase) + 6 * e * math.sin(t * 2.1)
-        dy = 5 * math.sin(t * 2 * math.pi / 2.4) - 14 * e  # breathe, and rise on loud words
-        zoom = 1 + 0.012 * math.sin(t * 2 * math.pi / 2.4) + 0.025 * e
+        # Subtle on purpose: a presenter mostly holds still; movement only keeps the frame from looking frozen.
+        angle = 0.5 * math.sin(t * 2 * math.pi / 5.3 + phase) + 0.6 * e * math.sin(t * 0.9 + phase)
+        dx = 3 * math.sin(t * 2 * math.pi / 4.7 + phase)
+        dy = 2.5 * math.sin(t * 2 * math.pi / 3.2) - 5 * e  # breathe, and lift slightly on loud words
+        zoom = 1 + 0.004 * math.sin(t * 2 * math.pi / 3.2) + 0.01 * e
         im = poses[(mouths[i], i in blinks)]
         # rotate/scale around the face, then cut the window that puts the face at (WIDTH/2, FACE_Y)
         moved = im.transform(im.size, Image.AFFINE, _affine(angle, zoom, fx, fy), resample=Image.BILINEAR,
