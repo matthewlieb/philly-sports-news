@@ -47,10 +47,19 @@ def _recent_hooks(team: str, limit: int = 4) -> list[str]:
     return hooks[:limit]
 
 
+def _scheduled_host(day: str) -> str | None:
+    """SHORTS_HOST names the on-screen host. With SHORTS_HOST_ALTERNATE set it only appears on every other day,
+    so retention with and without a host can be compared on similar news."""
+    name = os.environ.get("SHORTS_HOST") or None
+    if name and os.environ.get("SHORTS_HOST_ALTERNATE") and datetime.fromisoformat(day).toordinal() % 2:
+        return None
+    return name
+
+
 def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapshot: dict | None = None,
                script_path: str | None = None, breaking: str | None = None, script: dict | None = None,
                host: str | None = None) -> tuple[Path, dict]:
-    host = host or os.environ.get("SHORTS_HOST") or None
+    host = host or _scheduled_host(day)
     if script:
         pass
     elif script_path:
@@ -64,6 +73,7 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
             raise SystemExit(f"No {team} brief for {day}")
         script = write_script(team, brief, snapshot if snapshot is not None else team_snapshot(team),
                               postgame=kind == "postgame", recent_hooks=_recent_hooks(team))
+    script["host"] = host or ""
     print(json.dumps(script, indent=1))
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{team}-{day}-{kind}.json").write_text(json.dumps(script, indent=1))

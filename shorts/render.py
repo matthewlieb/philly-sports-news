@@ -167,12 +167,18 @@ def render(script: dict, timeline: list[dict], voice: Path, total: float, team: 
     """photos: per beat, a prepared 1080x1920 photo (graphics.photo_frame) or None for stadium footage.
     host: a shorts.host.HOSTS name to put a talking host under the split for every beat after the hook."""
     photos = list(photos)
-    bg = _background(timeline, total, tag, team, photos, workdir, host=bool(host))
-    frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host=bool(host))
+    clip = None
+    if host and len(timeline) > 1:
+        try:
+            clip = render_host(host, voice, total, workdir / "host.mp4", seed=tag)
+        except Exception as e:  # a broken host must never cost us the video
+            print(f"Host {host} failed, rendering without it: {e}")
+    script["host"] = host if clip else ""
+    bg = _background(timeline, total, tag, team, photos, workdir, host=bool(clip))
+    frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host=bool(clip))
     inputs = ["-i", str(bg), "-f", "concat", "-safe", "0", "-i", str(frames), "-i", str(voice)]
     graph = f"[1:v]fps={FPS},format=rgba[ov];[0:v][ov]overlay=0:0:eof_action=repeat[v]"
-    if host and len(timeline) > 1:
-        clip = render_host(host, voice, total, workdir / "host.mp4", seed=tag)
+    if clip:
         inputs += ["-i", str(clip)]
         graph = (f"[0:v][3:v]overlay=0:{_SPLIT}:enable='gte(t,{timeline[1]['start']:.3f})'[base];"
                  f"[1:v]fps={FPS},format=rgba[ov];[base][ov]overlay=0:0:eof_action=repeat[v]")

@@ -30,7 +30,7 @@ def _tts_openai(text: str, path: Path, persona: dict | None = None) -> None:
 
 
 def _tts_elevenlabs(text: str, path: Path, persona: dict | None = None) -> None:
-    voice_id = os.environ["ELEVENLABS_VOICE_ID"]
+    voice_id = (persona or {}).get("elevenlabs_voice") or os.environ["ELEVENLABS_VOICE_ID"]
     resp = requests.post(
         f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
         headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
@@ -87,6 +87,8 @@ def narrate(beats: list[dict], workdir: Path, persona: dict | None = None) -> tu
     A beat with "countdown": n is followed by n seconds of ticks before the next beat (quiz questions).
     persona: optional OpenAI {"voice", "instructions", "model"} for an on-screen host."""
     provider = os.environ.get("VOICE_PROVIDER", "openai").lower()
+    if persona and persona.get("elevenlabs_voice") and os.environ.get("ELEVENLABS_API_KEY"):
+        provider = "elevenlabs"  # a host with its own ElevenLabs voice always uses it
     tts = _tts_elevenlabs if provider == "elevenlabs" else _tts_openai
     tempo = float(os.environ.get("VOICE_TEMPO", "1.18"))
     gap = 0.12

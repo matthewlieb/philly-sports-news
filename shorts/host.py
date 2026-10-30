@@ -7,6 +7,7 @@ avatar service. The output is a video of the bottom part of the screen that rend
 """
 import json
 import math
+import os
 import random
 import subprocess
 from pathlib import Path
@@ -23,6 +24,7 @@ HOSTS = {
     "pigeon": {
         "face": (520, 770), "scale": 1.25,
         "voice": "verse",
+        "elevenlabs_voice": os.environ.get("ELEVENLABS_VOICE_PIGEON"),
         "instructions": (
             "A wisecracking cartoon Philadelphia pigeon hosting the sports news. Thick South Philly accent: 'water' "
             "is 'wooder', 'Eagles' leans toward 'Iggles', the Philly 'eh-oh' in 'go' and 'home', dropped g's. "
@@ -31,6 +33,7 @@ HOSTS = {
     "superfan": {
         "face": (525, 650), "scale": 1.2,
         "voice": "ash",
+        "elevenlabs_voice": os.environ.get("ELEVENLABS_VOICE_SUPERFAN"),
         "instructions": (
             "Born-and-raised South Philly superfan hosting a sports update. Strong, authentic Philadelphia accent: "
             "'wooder', 'Iggles', the Philly 'eh-oh' in 'go' and 'home', dropped g's on -ing words, clipped consonants. "
@@ -39,6 +42,7 @@ HOSTS = {
     "anchor": {
         "face": (500, 720), "scale": 1.15,
         "voice": "coral",
+        "elevenlabs_voice": os.environ.get("ELEVENLABS_VOICE_ANCHOR"),
         "instructions": (
             "Philadelphia TV sports anchor who grew up in Delaware County. Polished, quick delivery with a noticeable "
             "Philly accent on vowels ('wooder', the Philly 'oh' in 'go' and 'home'), confident and warm. Say the text "
