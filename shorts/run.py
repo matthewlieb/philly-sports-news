@@ -48,12 +48,14 @@ def _recent_hooks(team: str, limit: int = 4) -> list[str]:
 
 
 def _scheduled_host(day: str) -> str | None:
-    """SHORTS_HOST names the on-screen host. With SHORTS_HOST_ALTERNATE set it only appears on every other day,
-    so retention with and without a host can be compared on similar news."""
-    name = os.environ.get("SHORTS_HOST") or None
-    if name and os.environ.get("SHORTS_HOST_ALTERNATE") and datetime.fromisoformat(day).toordinal() % 2:
+    """SHORTS_HOST names the on-screen host, or several ("pigeon,superfan") that take turns by day. With
+    SHORTS_HOST_ALTERNATE set, a no-host day joins the rotation, so retention with and without each host can be
+    compared on similar news."""
+    names = [n.strip() for n in (os.environ.get("SHORTS_HOST") or "").split(",") if n.strip()]
+    if not names:
         return None
-    return name
+    cycle = ([None] if os.environ.get("SHORTS_HOST_ALTERNATE") else []) + names
+    return cycle[datetime.fromisoformat(day).toordinal() % len(cycle)]
 
 
 def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapshot: dict | None = None,
