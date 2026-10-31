@@ -149,3 +149,18 @@ def _affine(angle_deg: float, zoom: float, cx: float, cy: float) -> tuple:
     a = math.radians(angle_deg)
     cos, sin = math.cos(a) / zoom, math.sin(a) / zoom
     return (cos, sin, cx - cos * cx - sin * cy, -sin, cos, cy + sin * cx - cos * cy)
+
+
+def fit_clip(name: str, src: Path, total: float, out: Path) -> Path:
+    """Frame a talking-head video generated from the host's base image (any resolution, same aspect) the same way
+    render_host frames the still: face at (WIDTH/2, FACE_Y), 30 fps, held on its last frame to `total` seconds."""
+    host = HOSTS[name]
+    w = round(1024 * host["scale"])
+    fx, fy = (c * host["scale"] for c in host["face"])
+    left, top = max(0, round(fx - WIDTH / 2)), max(0, round(fy - FACE_Y))
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-an", "-vf",
+         f"scale={w}:-2:flags=lanczos,crop={WIDTH}:{HEIGHT}:{left}:{top},fps={FPS},tpad=stop_mode=clone:stop_duration=60",
+         "-t", f"{total:.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", str(out)],
+        check=True)
+    return out

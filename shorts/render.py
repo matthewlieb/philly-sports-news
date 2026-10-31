@@ -8,7 +8,7 @@ from PIL import Image
 from shorts import graphics as g
 from lib.teams import SITE_URL
 from shorts.broll import pick_clips
-from shorts.host import HEIGHT as HOST_HEIGHT, render_host
+from shorts.host import HEIGHT as HOST_HEIGHT, fit_clip, render_host
 
 FPS = 30
 _POP = [(0.0, 0.86), (0.05, 1.06), (0.10, 1.0)]
@@ -163,14 +163,18 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
 
 
 def render(script: dict, timeline: list[dict], voice: Path, total: float, team: str, tag: str,
-           workdir: Path, out: Path, photos: list[Path | None] = (), host: str | None = None) -> Path:
+           workdir: Path, out: Path, photos: list[Path | None] = (), host: str | None = None,
+           host_video: Path | None = None) -> Path:
     """photos: per beat, a prepared 1080x1920 photo (graphics.photo_frame) or None for stadium footage.
-    host: a shorts.host.HOSTS name to put a talking host under the split for every beat after the hook."""
+    host: a shorts.host.HOSTS name to put a talking host under the split for every beat after the hook.
+    host_video: an already-animated talking video of that host (e.g. from a lip-sync model) to use instead of
+    animating the still here."""
     photos = list(photos)
     clip = None
     if host and len(timeline) > 1:
         try:
-            clip = render_host(host, voice, total, workdir / "host.mp4", seed=tag)
+            clip = (fit_clip(host, host_video, total, workdir / "host.mp4") if host_video
+                    else render_host(host, voice, total, workdir / "host.mp4", seed=tag))
         except Exception as e:  # a broken host must never cost us the video
             print(f"Host {host} failed, rendering without it: {e}")
     script["host"] = host if clip else ""
