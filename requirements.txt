@@ -26,3 +26,4 @@ Pillow>=10.0
 google-auth-oauthlib>=1.2
 boto3==1.43.111
 opencv-python-headless==4.13.0.92
+elevenlabs==2.75.0

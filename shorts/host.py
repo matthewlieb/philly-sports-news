@@ -25,6 +25,7 @@ HOSTS = {
         "face": (520, 770), "scale": 1.25,
         "voice": "verse",
         "elevenlabs_voice": os.environ.get("ELEVENLABS_VOICE_PIGEON"),
+        "elevenlabs_tags": "[thick South Philadelphia accent] [wisecracking cartoon character]",
         "instructions": (
             "A wisecracking cartoon Philadelphia pigeon hosting the sports news. Thick South Philly accent: 'water' "
             "is 'wooder', 'Eagles' leans toward 'Iggles', the Philly 'eh-oh' in 'go' and 'home', dropped g's. "
@@ -34,6 +35,7 @@ HOSTS = {
         "face": (525, 650), "scale": 1.2,
         "voice": "ash",
         "elevenlabs_voice": os.environ.get("ELEVENLABS_VOICE_SUPERFAN"),
+        "elevenlabs_tags": "[thick South Philadelphia accent] [fired up sports radio]",
         "instructions": (
             "Born-and-raised South Philly superfan hosting a sports update. Strong, authentic Philadelphia accent: "
             "'wooder', 'Iggles', the Philly 'eh-oh' in 'go' and 'home', dropped g's on -ing words, clipped consonants. "
@@ -43,6 +45,7 @@ HOSTS = {
         "face": (500, 720), "scale": 1.15,
         "voice": "coral",
         "elevenlabs_voice": os.environ.get("ELEVENLABS_VOICE_ANCHOR"),
+        "elevenlabs_tags": "[Philadelphia accent] [confident TV sports anchor]",
         "instructions": (
             "Philadelphia TV sports anchor who grew up in Delaware County. Polished, quick delivery with a noticeable "
             "Philly accent on vowels ('wooder', the Philly 'oh' in 'go' and 'home'), confident and warm. Say the text "

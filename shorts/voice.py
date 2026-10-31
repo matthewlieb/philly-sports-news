@@ -6,7 +6,6 @@ import os
 import subprocess
 from pathlib import Path
 
-import requests
 from openai import OpenAI
 
 from lib.pronunciation import for_speech
@@ -30,16 +29,21 @@ def _tts_openai(text: str, path: Path, persona: dict | None = None) -> None:
 
 
 def _tts_elevenlabs(text: str, path: Path, persona: dict | None = None) -> None:
-    voice_id = (persona or {}).get("elevenlabs_voice") or os.environ["ELEVENLABS_VOICE_ID"]
-    resp = requests.post(
-        f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
-        headers={"xi-api-key": os.environ["ELEVENLABS_API_KEY"]},
-        json={"text": text, "model_id": os.environ.get("ELEVENLABS_MODEL", "eleven_multilingual_v2"),
-              "voice_settings": {"stability": 0.35, "similarity_boost": 0.8, "style": 0.45}},
-        timeout=120,
+    """ElevenLabs reads ELEVENLABS_API_KEY from the environment. A persona can set its own voice, model and
+    delivery tags (v3/v4 audio tags such as "[thick South Philadelphia accent]", which steer the read but aren't spoken)."""
+    from elevenlabs import ElevenLabs, VoiceSettings
+
+    persona = persona or {}
+    tags = persona.get("elevenlabs_tags") or ""
+    audio = ElevenLabs().text_to_speech.convert(
+        text=f"{tags} {text}".strip(),
+        voice_id=persona.get("elevenlabs_voice") or os.environ["ELEVENLABS_VOICE_ID"],
+        model_id=persona.get("elevenlabs_model") or os.environ.get("ELEVENLABS_MODEL", "eleven_v4"),
+        voice_settings=VoiceSettings(stability=0.4, similarity_boost=0.8),
     )
-    resp.raise_for_status()
-    path.write_bytes(resp.content)
+    with open(path, "wb") as f:
+        for chunk in audio:
+            f.write(chunk)
 
 
 def duration(path: Path) -> float:
