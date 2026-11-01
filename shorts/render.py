@@ -174,7 +174,8 @@ def render(script: dict, timeline: list[dict], voice: Path, total: float, team: 
     if host and len(timeline) > 1:
         try:
             clip = (fit_clip(host, host_video, total, workdir / "host.mp4") if host_video
-                    else render_host(host, voice, total, workdir / "host.mp4", seed=tag))
+                    else render_host(host, voice, total, workdir / "host.mp4", seed=tag, timeline=timeline,
+                                     beats=script.get("beats") or []))
         except Exception as e:  # a broken host must never cost us the video
             print(f"Host {host} failed, rendering without it: {e}")
     script["host"] = host if clip else ""

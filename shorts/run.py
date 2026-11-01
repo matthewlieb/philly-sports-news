@@ -15,6 +15,7 @@
 import argparse
 import json
 import os
+import shutil
 import sys
 import tempfile
 from datetime import datetime
@@ -81,17 +82,20 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
     (out_dir / f"{team}-{day}-{kind}.json").write_text(json.dumps(script, indent=1))
 
     workdir = Path(tempfile.mkdtemp(prefix=f"short-{team}-"))
-    voice, timeline = narrate(script["beats"], workdir, HOSTS.get(host))
-    total = timeline[-1]["end"] + 0.6
     try:
-        pictures, script["photo_credits"] = beat_photos(script, team, workdir)
-    except Exception as e:
-        print(f"Photos unavailable, using footage only: {e}")
-        pictures, script["photo_credits"] = [], []
-    label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA"}.get(kind, "DAILY")
-    tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
-    out = out_dir / f"{team}-{day}-{kind}{'-' + host if host else ''}.mp4"
-    render(script, timeline, voice, total, team, tag, workdir, out, pictures, host=host)
+        voice, timeline = narrate(script["beats"], workdir, HOSTS.get(host))
+        total = timeline[-1]["end"] + 0.6
+        try:
+            pictures, script["photo_credits"] = beat_photos(script, team, workdir)
+        except Exception as e:
+            print(f"Photos unavailable, using footage only: {e}")
+            pictures, script["photo_credits"] = [], []
+        label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA"}.get(kind, "DAILY")
+        tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
+        out = out_dir / f"{team}-{day}-{kind}{'-' + host if host else ''}.mp4"
+        render(script, timeline, voice, total, team, tag, workdir, out, pictures, host=host)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)  # frames and audio run to hundreds of MB per video
     print(f"Rendered {out} ({total:.1f}s)")
     return out, script
 
