@@ -37,11 +37,11 @@ def _run(cmd: list[str]) -> None:
 
 
 def _background(timeline: list[dict], total: float, seed: str, team: str, photos: list[Path | None],
-                workdir: Path, host_beats: frozenset = frozenset()) -> Path:
+                workdir: Path, host_beats: frozenset = frozenset(), cartoon: bool = False) -> Path:
     """One segment per beat: the beat's photo with a slow push-in, or tinted stadium footage when it has none.
     Host beats show the middle of the picture in the top part, above the split."""
     out = workdir / "bg.mp4"
-    clips = pick_clips(len(timeline), seed)
+    clips = pick_clips(len(timeline), seed, cartoon=cartoon)
     tint = workdir / "tint.png"
     g.tint_layer(team).save(tint)
     rnd = random.Random(seed)
@@ -200,7 +200,7 @@ def render(script: dict, timeline: list[dict], voice: Path, total: float, team: 
             clips = []
     script["host"] = host if clips else ""
     host_beats = frozenset(i for i, _, _ in spans) if clips else frozenset()
-    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats)
+    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats, cartoon=bool(host_beats))
     frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host_beats=host_beats)
     inputs = ["-i", str(bg), "-f", "concat", "-safe", "0", "-i", str(frames), "-i", str(voice)]
     chain, last = [], "0:v"

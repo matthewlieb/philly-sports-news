@@ -1,7 +1,7 @@
 """Background footage: hand-picked, team-neutral Pexels stadium/crowd and Philadelphia city clips, plus our own
 AI-generated atmosphere clips (stadium, fans, tailgates, the city; no real players, logos or events) from the media
-bucket under broll/ai/ (Pexels license: free, no attribution
-required). They sit under a heavy team-color tint, so they read as atmosphere rather than a specific game."""
+bucket under broll/ai/ (cartoon-*.mp4 in the hosts' Pixar-style look). Pexels license: free, no attribution
+required. They sit under a heavy team-color tint, so they read as atmosphere rather than a specific game."""
 import os
 import random
 from pathlib import Path
@@ -59,16 +59,22 @@ def _ai_clips() -> list[Path]:
         return []
 
 
-def pick_clips(count: int, seed: str) -> list[Path]:
-    """Up to `count` local clip paths, varied day to day. Empty if PEXELS_API_KEY is unset."""
+def pick_clips(count: int, seed: str, cartoon: bool = False) -> list[Path]:
+    """Up to `count` local clip paths, varied day to day. Empty if PEXELS_API_KEY is unset.
+
+    cartoon=True (the days a cartoon host presents) uses our Pixar-style clips first, so the host and the footage
+    share a look; otherwise those are left out and the footage stays realistic."""
     key = os.environ.get("PEXELS_API_KEY")
     if not key:
         return []
     rnd = random.Random(seed)
-    stadium, philly, ai = STADIUM_IDS[:], PHILLY_IDS[:], _ai_clips()
+    stadium, philly = STADIUM_IDS[:], PHILLY_IDS[:]
+    ai = [p for p in _ai_clips() if p.name.startswith("ai-cartoon-") == cartoon]
     rnd.shuffle(stadium)
     rnd.shuffle(philly)
     rnd.shuffle(ai)
+    if cartoon and len(ai) >= count:
+        return ai[:count]
     # rotate our own atmosphere clips, game footage and the city
     order = [x for trio in zip(ai or [None] * len(stadium), stadium, philly) for x in trio if x is not None]
     clips = []
