@@ -226,8 +226,8 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
     from shorts.cartoons import approved
 
     def options_for(person: str) -> list[dict]:
-        # Licensed photos first; an approved cartoon portrait when there is none.
-        return find(person, team) or approved(person, team)
+        # Licensed photos first, then the approved cartoon portrait: a player's second beat shows the cartoon.
+        return find(person, team) + approved(person, team)
 
     beats = script["beats"]
     people = [b.get("person") or "" for b in beats]

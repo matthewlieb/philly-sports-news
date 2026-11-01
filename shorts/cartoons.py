@@ -1,6 +1,7 @@
 """Cartoon portraits of the roster, in the same Pixar-style look as the on-screen hosts.
 
-They fill in for players we have no usable licensed photo of. Each one is drawn from that player's licensed
+They follow a player's licensed photos in rotation, so a video that talks about him twice doesn't show the same
+picture twice. Each one is drawn from that player's licensed
 reference photo (so the likeness is his), with a plain midnight-green jersey and his number: no logos, team names or
 league marks. Nothing is used until a person approves it on /admin/cartoons, because a bad likeness gets roasted.
 Images live in the media bucket under cartoons/<team>/<slug>.png; status lives in Redis.
