@@ -1,4 +1,6 @@
-"""Background footage: hand-picked, team-neutral Pexels stadium/crowd and Philadelphia city clips (Pexels license: free, no attribution
+"""Background footage: hand-picked, team-neutral Pexels stadium/crowd and Philadelphia city clips, plus our own
+AI-generated atmosphere clips (stadium, fans, tailgates, the city; no real players, logos or events) from the media
+bucket under broll/ai/ (Pexels license: free, no attribution
 required). They sit under a heavy team-color tint, so they read as atmosphere rather than a specific game."""
 import os
 import random
@@ -33,20 +35,48 @@ def _download(clip_id: int, key: str) -> Path | None:
         return None
 
 
+def _ai_clips() -> list[Path]:
+    """Our AI atmosphere clips, downloaded from the bucket once per container."""
+    if not os.environ.get("S3_BUCKET"):
+        return []
+    try:
+        import boto3
+        s3 = boto3.client("s3", endpoint_url=os.environ["S3_ENDPOINT"], region_name="auto",
+                          aws_access_key_id=os.environ["S3_ACCESS_KEY_ID"],
+                          aws_secret_access_key=os.environ["S3_SECRET_ACCESS_KEY"])
+        keys = [o["Key"] for o in s3.list_objects_v2(Bucket=os.environ["S3_BUCKET"], Prefix="broll/ai/").get("Contents", [])
+                if o["Key"].endswith(".mp4")]
+        CACHE.mkdir(parents=True, exist_ok=True)
+        paths = []
+        for key in keys:
+            path = CACHE / ("ai-" + key.rsplit("/", 1)[-1])
+            if not path.exists():
+                s3.download_file(os.environ["S3_BUCKET"], key, str(path))
+            paths.append(path)
+        return paths
+    except Exception as e:
+        print(f"AI b-roll unavailable: {e}")
+        return []
+
+
 def pick_clips(count: int, seed: str) -> list[Path]:
     """Up to `count` local clip paths, varied day to day. Empty if PEXELS_API_KEY is unset."""
     key = os.environ.get("PEXELS_API_KEY")
     if not key:
         return []
     rnd = random.Random(seed)
-    stadium, philly = STADIUM_IDS[:], PHILLY_IDS[:]
+    stadium, philly, ai = STADIUM_IDS[:], PHILLY_IDS[:], _ai_clips()
     rnd.shuffle(stadium)
     rnd.shuffle(philly)
-    ids = [i for pair in zip(stadium, philly) for i in pair]  # alternate game atmosphere and the city
+    rnd.shuffle(ai)
+    # rotate our own atmosphere clips, game footage and the city
+    order = [x for trio in zip(ai or [None] * len(stadium), stadium, philly) for x in trio if x is not None]
     clips = []
-    for clip_id in ids:
+    for item in order:
         if len(clips) == count:
             break
-        if path := _download(clip_id, key):
+        if isinstance(item, Path):
+            clips.append(item)
+        elif path := _download(item, key):
             clips.append(path)
     return clips

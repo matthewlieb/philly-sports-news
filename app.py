@@ -304,6 +304,32 @@ def admin_comment_action(platform, cid):
     return redirect(url_for("admin_comments"))
 
 
+@app.route("/admin/cartoons")
+def admin_cartoons():
+    if not _admin_ok():
+        abort(404)
+    from shorts import cartoons
+
+    order = {"pending": 0, "rejected": 1, "approved": 2}
+    sign = cartoons.image_url if os.environ.get("S3_BUCKET") else None
+    items = [{**c, "slug": s, "url": sign(c["key"]) if sign else c.get("preview_url", "")}
+             for s, c in cartoons.all_cartoons("eagles").items()]
+    items.sort(key=lambda c: (order.get(c["status"], 3), c["name"]))
+    counts = {k: sum(c["status"] == k for c in items) for k in order}
+    return render_template("admin_cartoons.html", items=items, counts=counts)
+
+
+@app.route("/admin/cartoons/<name_slug>", methods=["POST"])
+def admin_cartoon_action(name_slug):
+    if not _admin_ok():
+        abort(404)
+    from shorts import cartoons
+
+    if request.form.get("action") in ("approved", "rejected"):
+        cartoons.set_status("eagles", name_slug, request.form["action"])
+    return redirect(url_for("admin_cartoons"))
+
+
 @app.route("/robots.txt")
 def robots():
     body = f"User-agent: *\nAllow: /\nDisallow: /health\nDisallow: /admin\n\nSitemap: {SITE_URL}/sitemap.xml\n"

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Cartoon review | {{ site_name }}{% endblock %}
+{% block head_extra %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <h1>Cartoon review</h1>
+  <p class="lede">Approved cartoons stand in for players we have no licensed photo of. Reject any likeness that's off; it gets redrawn on the next run.</p>
+  <p class="muted">{{ counts.pending }} pending · {{ counts.approved }} approved · {{ counts.rejected }} rejected</p>
+  <div class="cartoon-grid">
+    {% for c in items %}
+    <section class="card cartoon-card status-{{ c.status }}">
+      <img src="{{ c.url }}" alt="{{ c.name }}" loading="lazy">
+      <div class="card-body">
+        <p><strong>{{ c.name }}</strong> <span class="muted">{{ c.position }}{% if c.jersey %} #{{ c.jersey }}{% endif %}</span></p>
+        <p class="eyebrow">{{ c.status }}</p>
+        <form method="post" action="{{ url_for('admin_cartoon_action', name_slug=c.slug) }}">
+          {% if c.status != 'approved' %}<button class="btn btn-success btn-sm" name="action" value="approved">Approve</button>{% endif %}
+          {% if c.status != 'rejected' %}<button class="btn btn-outline-danger btn-sm" name="action" value="rejected">Reject</button>{% endif %}
+        </form>
+      </div>
+    </section>
+    {% else %}
+    <p>No cartoons yet.</p>
+    {% endfor %}
+  </div>
+</main>
+{% endblock %}

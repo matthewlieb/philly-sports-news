@@ -120,6 +120,23 @@ def roster_names(team: str) -> list[str]:
     return [n for n in names if n]
 
 
+def roster(team: str) -> list[dict]:
+    """Current roster as [{"name", "jersey", "position"}], players first, then the head coach (position "HC")."""
+    try:
+        data = _get(f"{_BASE}/{_SPORTS[team]}/teams/phi/roster")
+    except Exception as e:
+        print(f"ESPN roster lookup failed: {e}")
+        return []
+    athletes = data.get("athletes") or []
+    if athletes and "items" in athletes[0]:
+        athletes = [a for group in athletes for a in group.get("items", [])]
+    people = [{"name": a.get("fullName") or a.get("displayName"), "jersey": a.get("jersey") or "",
+               "position": (a.get("position") or {}).get("abbreviation", "")} for a in athletes]
+    for c in data.get("coach") or []:
+        people.append({"name": f"{c.get('firstName', '')} {c.get('lastName', '')}".strip(), "jersey": "", "position": "HC"})
+    return [p for p in people if p["name"]]
+
+
 def hours_since(iso: str) -> float:
     return (datetime.now(timezone.utc) - datetime.fromisoformat(iso)).total_seconds() / 3600
 

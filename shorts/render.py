@@ -15,7 +15,7 @@ _POP = [(0.0, 0.86), (0.05, 1.06), (0.10, 1.0)]
 _CAPTION_Y, _MIDDLE_Y, _PROGRESS_Y = 1180, 520, 120
 _PHOTO_HOOK_TOP, _PHOTO_CARD_Y, _PHOTO_CARD_MAX, _URL_Y = 640, 740, 420, 1400
 _ZOOM = 0.07  # slow push-in on photos over each beat
-# With an on-screen host (every beat after the hook): photo on top, host below the split, captions on the seam.
+# On a host beat: photo on top, host below the split, captions on the seam.
 _SPLIT = 1920 - HOST_HEIGHT
 _HOST_CAPTION_Y, _HOST_CARD_MAX, _HOST_URL_Y = _SPLIT - 100, 420, _SPLIT - 190
 _HOST_PHOTO_TOP = 60  # which rows of a full-height photo frame land in the top part (keeps faces in view)
@@ -37,9 +37,9 @@ def _run(cmd: list[str]) -> None:
 
 
 def _background(timeline: list[dict], total: float, seed: str, team: str, photos: list[Path | None],
-                workdir: Path, host: bool = False) -> Path:
+                workdir: Path, host_beats: frozenset = frozenset()) -> Path:
     """One segment per beat: the beat's photo with a slow push-in, or tinted stadium footage when it has none.
-    With a host, beats after the hook show the middle of the picture in the top part, above the split."""
+    Host beats show the middle of the picture in the top part, above the split."""
     out = workdir / "bg.mp4"
     clips = pick_clips(len(timeline), seed)
     tint = workdir / "tint.png"
@@ -47,7 +47,7 @@ def _background(timeline: list[dict], total: float, seed: str, team: str, photos
     rnd = random.Random(seed)
     inputs, filters, n = [], [], 0
     for i, beat in enumerate(timeline):
-        fit = f",crop={g.W}:{_SPLIT}:0:{_HOST_PHOTO_TOP},pad={g.W}:{g.H}:0:0" if host and i else ""
+        fit = f",crop={g.W}:{_SPLIT}:0:{_HOST_PHOTO_TOP},pad={g.W}:{g.H}:0:0" if i in host_beats else ""
         end = timeline[i + 1]["start"] if i + 1 < len(timeline) else total
         dur = end - beat["start"]
         frames = max(1, round(dur * FPS))
@@ -78,7 +78,7 @@ def _background(timeline: list[dict], total: float, seed: str, team: str, photos
 
 
 def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str, tag: str, photos: list[Path | None],
-                     workdir: Path, host: bool = False) -> Path:
+                     workdir: Path, host_beats: frozenset = frozenset()) -> Path:
     frames_dir = workdir / "frames"
     frames_dir.mkdir(exist_ok=True)
     brand = g.brand_tag(tag, team)
@@ -95,8 +95,8 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
             continue
         if c.get("kind") == "question":
             q = g.question_card(c.get("label") or "", c["value"], team)
-            cards[i] = (q, _HOST_CAPTION_Y - q.height) if host and i else (q, _MIDDLE_Y)
-        elif host and i:  # sits right above the captions so the photo's face stays clear
+            cards[i] = (q, _HOST_CAPTION_Y - q.height) if i in host_beats else (q, _MIDDLE_Y)
+        elif i in host_beats:  # sits right above the captions so the photo's face stays clear
             card = g.card(c, team, _HOST_CARD_MAX)
             cards[i] = (card, _HOST_CAPTION_Y + 10 - card.height)
         elif has_photo[i]:
@@ -126,7 +126,7 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
         pop = next(f for dt, f in reversed(_POP) if since + 1e-6 >= dt)
 
         frame = Image.new("RGBA", (g.W, g.H), (0, 0, 0, 0))
-        split = host and bi > 0
+        split = bi in host_beats
         caption_y = _HOST_CAPTION_Y if split else _CAPTION_Y
         if split:
             frame.alpha_composite(seam, (0, _SPLIT - 4))
@@ -162,31 +162,53 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
     return listing
 
 
+def host_beat_spans(timeline: list[dict], total: float) -> list[tuple[int, float, float]]:
+    """The beats the host is on screen for: the first line after the hook and the closing question (the bookends;
+    a face matters most right after the hook and at the call to comment). [(beat index, start, end)]"""
+    if len(timeline) < 2:
+        return []
+    picks = sorted({1, len(timeline) - 1})
+    return [(i, timeline[i]["start"], timeline[i + 1]["start"] if i + 1 < len(timeline) else total) for i in picks]
+
+
 def render(script: dict, timeline: list[dict], voice: Path, total: float, team: str, tag: str,
            workdir: Path, out: Path, photos: list[Path | None] = (), host: str | None = None,
            host_video: Path | None = None) -> Path:
     """photos: per beat, a prepared 1080x1920 photo (graphics.photo_frame) or None for stadium footage.
-    host: a shorts.host.HOSTS name to put a talking host under the split for every beat after the hook.
-    host_video: an already-animated talking video of that host (e.g. from a lip-sync model) to use instead of
-    animating the still here."""
+    host: a shorts.host.HOSTS name to put a talking host under the split on the bookend beats (host_beat_spans).
+    It is animated by P-Video when SHORTS_HOST_ENGINE=pvideo (within the monthly budget), else drawn here.
+    host_video: an already-animated talking video of that host for the whole narration, to use instead."""
     photos = list(photos)
-    clip = None
-    if host and len(timeline) > 1:
+    spans = host_beat_spans(timeline, total) if host else []
+    clips: list[tuple[float, float, Path, float]] = []  # (start, end, video, the video's time offset)
+    if spans:
         try:
-            clip = (fit_clip(host, host_video, total, workdir / "host.mp4") if host_video
-                    else render_host(host, voice, total, workdir / "host.mp4", seed=tag, timeline=timeline,
-                                     beats=script.get("beats") or []))
+            if host_video:
+                full = fit_clip(host, host_video, total, workdir / "host.mp4")
+                clips = [(s, e, full, 0.0) for _, s, e in spans]
+            else:
+                from shorts import avatar
+                segments = avatar.animate(host, voice, spans, workdir) if avatar.enabled() else None
+                if segments:
+                    clips = [(s, e, path, s) for (s, e, path) in segments]
+                else:
+                    full = render_host(host, voice, total, workdir / "host.mp4", seed=tag, timeline=timeline,
+                                       beats=script.get("beats") or [])
+                    clips = [(s, e, full, 0.0) for _, s, e in spans]
         except Exception as e:  # a broken host must never cost us the video
             print(f"Host {host} failed, rendering without it: {e}")
-    script["host"] = host if clip else ""
-    bg = _background(timeline, total, tag, team, photos, workdir, host=bool(clip))
-    frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host=bool(clip))
+            clips = []
+    script["host"] = host if clips else ""
+    host_beats = frozenset(i for i, _, _ in spans) if clips else frozenset()
+    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats)
+    frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host_beats=host_beats)
     inputs = ["-i", str(bg), "-f", "concat", "-safe", "0", "-i", str(frames), "-i", str(voice)]
-    graph = f"[1:v]fps={FPS},format=rgba[ov];[0:v][ov]overlay=0:0:eof_action=repeat[v]"
-    if clip:
-        inputs += ["-i", str(clip)]
-        graph = (f"[0:v][3:v]overlay=0:{_SPLIT}:enable='gte(t,{timeline[1]['start']:.3f})'[base];"
-                 f"[1:v]fps={FPS},format=rgba[ov];[base][ov]overlay=0:0:eof_action=repeat[v]")
+    chain, last = [], "0:v"
+    for k, (s, e, path, offset) in enumerate(clips):
+        inputs += ["-itsoffset", f"{offset:.3f}", "-i", str(path)]
+        chain.append(f"[{last}][{3 + k}:v]overlay=0:{_SPLIT}:eof_action=pass:enable='between(t,{s:.3f},{e:.3f})'[h{k}]")
+        last = f"h{k}"
+    graph = ";".join(chain + [f"[1:v]fps={FPS},format=rgba[ov];[{last}][ov]overlay=0:0:eof_action=repeat[v]"])
     _run([
         "ffmpeg", "-y", *inputs,
         "-filter_complex", graph,

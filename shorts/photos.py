@@ -223,6 +223,12 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
     """
     from shorts.graphics import photo_frame
 
+    from shorts.cartoons import approved
+
+    def options_for(person: str) -> list[dict]:
+        # Licensed photos first; an approved cartoon portrait when there is none.
+        return find(person, team) or approved(person, team)
+
     beats = script["beats"]
     people = [b.get("person") or "" for b in beats]
     found: dict[str, list[dict]] = {}
@@ -230,10 +236,10 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
     # photo of them it falls back to footage. Otherwise it borrows the first person the video has a photo of.
     hook_person = script.get("hook_person") or ""
     if hook_person:
-        found[hook_person] = find(hook_person, team)
+        found[hook_person] = options_for(hook_person)
         people[0] = hook_person if found[hook_person] else ""
     elif not people[0] and script.get("kind") != "quiz":  # a quiz opener would spoil an answer
-        people[0] = next((p for p in people if p and (found.setdefault(p, find(p, team)))), "")
+        people[0] = next((p for p in people if p and (found.setdefault(p, options_for(p)))), "")
     people[-1] = "" if len(beats) > 2 else people[-1]
     used: dict[str, int] = {}
     out, credits = [], []
@@ -242,7 +248,7 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
             out.append(None)
             continue
         if person not in found:
-            found[person] = find(person, team)
+            found[person] = options_for(person)
         options = found[person]
         if not options:
             out.append(None)
