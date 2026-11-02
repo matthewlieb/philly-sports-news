@@ -180,6 +180,8 @@ def portrait(photo: dict, size: tuple[int, int] = (W, H)) -> Image.Image | None:
         print(f"Photo download failed ({photo['source']}): {e}")
         return None
     tw, th = size
+    if photo["source"].startswith("cartoon:"):
+        return _cartoon_frame(img, tw, th)
     faces = _faces(img)
     single_subject = bool(photo.get("name")) and re.fullmatch(
         rf"{re.escape(photo['name'])}[ _-]*(\(?\d{{4}}\)?)?[ _-]*(\(cropped\))?",
@@ -202,6 +204,21 @@ def _face_crop(img: Image.Image, face: tuple[int, int, int, int], tw: int, th: i
     return img.crop((left, top, left + tw, top + th))
 
 
+CARTOON_FACE_Y = 0.22  # where a cartoon portrait's face lands (fraction of frame height): above the hook words
+
+
+def _cartoon_frame(img: Image.Image, tw: int, th: int) -> Image.Image:
+    """Our cartoon portraits are chest-up with the face about 35% down and plenty of headroom. Fill the width and
+    lift the face high, so the opener's big words sit on the jersey, not the face; the dark studio background
+    continues below."""
+    scale = tw / img.width
+    img = img.resize((tw, round(img.height * scale)), Image.LANCZOS)
+    top = max(0, round(img.height * 0.35 - th * CARTOON_FACE_Y))
+    frame = Image.new("RGB", (tw, th), img.getpixel((tw // 2, img.height - 2)))
+    frame.paste(img.crop((0, top, tw, img.height)), (0, 0))
+    return frame
+
+
 def _fitted(img: Image.Image, tw: int, th: int) -> Image.Image:
     """The whole photo across the frame over a blurred, zoomed copy of itself: nobody gets cropped out."""
     cover = max(tw / img.width, th / img.height)
@@ -215,6 +232,10 @@ def _fitted(img: Image.Image, tw: int, th: int) -> Image.Image:
     return bg
 
 
+def cartoon_style() -> bool:
+    return os.environ.get("SHORTS_VISUALS", "cartoon") == "cartoon"
+
+
 def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | None], list[str]]:
     """A prepared frame per beat (or None for stadium footage) and the credit lines for the description.
 
@@ -226,7 +247,10 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
     from shorts.cartoons import approved
 
     def options_for(person: str) -> list[dict]:
-        # Licensed photos first, then the approved cartoon portrait: a player's second beat shows the cartoon.
+        # SHORTS_VISUALS=cartoon (the default) leads with the approved cartoon portrait: free-licensed photos are
+        # often years old and in another uniform (Barkley's main one is from Penn State). =photo leads with photos.
+        if cartoon_style():
+            return approved(person, team) + find(person, team)
         return find(person, team) + approved(person, team)
 
     beats = script["beats"]
@@ -259,7 +283,8 @@ def beat_photos(script: dict, team: str, workdir: Path) -> tuple[list[Path | Non
         if img is None:
             out.append(None)
             continue
-        path = workdir / f"photo{i}.jpg"
+        # render reads "-cartoon" in the name to frame the face on host beats (cartoon faces sit higher)
+        path = workdir / f"photo{i}{'-cartoon' if photo['source'].startswith('cartoon:') else ''}.jpg"
         photo_frame(img, team).save(path, quality=92)
         out.append(path)
         if photo.get("credit") and photo["credit"] not in credits:

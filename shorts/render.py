@@ -8,6 +8,7 @@ from PIL import Image
 from shorts import graphics as g
 from lib.teams import SITE_URL
 from shorts.broll import pick_clips
+from shorts.photos import cartoon_style
 from shorts.host import HEIGHT as HOST_HEIGHT, fit_clip, render_host
 
 FPS = 30
@@ -15,11 +16,13 @@ _POP = [(0.0, 0.86), (0.05, 1.06), (0.10, 1.0)]
 _CAPTION_Y, _MIDDLE_Y, _PROGRESS_Y = 1180, 520, 120
 _PHOTO_HOOK_TOP, _PHOTO_CARD_Y, _PHOTO_CARD_MAX, _URL_Y = 640, 740, 420, 1400
 _ZOOM = 0.07  # slow push-in on photos over each beat
+_PUNCH = 0.16  # extra zoom at the mid-beat cut
 # On a host beat: photo on top, host below the split, captions on the seam.
 _SPLIT = 1920 - HOST_HEIGHT
 _HOST_CAPTION_Y, _HOST_CARD_MAX, _HOST_URL_Y = _SPLIT - 100, 280, _SPLIT - 190
-# which rows of a full-height photo frame land in the top part: the face sits above the (short) card, not behind it
-_HOST_PHOTO_TOP = 200
+# which rows of a full-height photo frame land in the top part: the face sits above the (short) card, not behind it.
+# Cartoon frames put the face higher (photos.CARTOON_FACE_Y), so they start nearer the top.
+_HOST_PHOTO_TOP, _HOST_CARTOON_TOP = 200, 40
 
 
 def _chunks(words: list[tuple[str, float, float]]) -> list[list[int]]:
@@ -50,11 +53,12 @@ def _background(timeline: list[dict], total: float, seed: str, team: str, photos
     rnd = random.Random(seed)
     inputs, filters, n = [], [], 0
     for i, beat in enumerate(timeline):
-        fit = f",crop={g.W}:{_SPLIT}:0:{_HOST_PHOTO_TOP},pad={g.W}:{g.H}:0:0" if i in host_beats else ""
+        photo = photos[i] if i < len(photos) else None
+        top = _HOST_CARTOON_TOP if photo and "-cartoon" in photo.name else _HOST_PHOTO_TOP
+        fit = f",crop={g.W}:{_SPLIT}:0:{top},pad={g.W}:{g.H}:0:0" if i in host_beats else ""
         end = timeline[i + 1]["start"] if i + 1 < len(timeline) else total
         dur = end - beat["start"]
         frames = max(1, round(dur * FPS))
-        photo = photos[i] if i < len(photos) else None
         if i in scenes:
             inputs += ["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", str(scenes[i])]
             filters.append(f"[{n}:v]scale={g.W}:{g.H}:force_original_aspect_ratio=increase,crop={g.W}:{g.H},setsar=1,"
@@ -62,8 +66,10 @@ def _background(timeline: list[dict], total: float, seed: str, team: str, photos
             n += 1
         elif photo:
             inputs += ["-loop", "1", "-framerate", str(FPS), "-t", f"{dur:.3f}", "-i", str(photo)]
+            # a picture held over 4 s gets a punch-in cut partway, so the frame changes every few seconds
+            punch = f"+{_PUNCH}*gte(on,{round(frames * 0.45)})" if dur > 4 else ""
             filters.append(
-                f"[{n}:v]scale={g.W * 2}:{g.H * 2},zoompan=z='1+{_ZOOM}*on/{frames}':x='iw/2-(iw/zoom/2)':"
+                f"[{n}:v]scale={g.W * 2}:{g.H * 2},zoompan=z='1+{_ZOOM}*on/{frames}{punch}':x='iw/2-(iw/zoom/2)':"
                 f"y='ih/2-(ih/zoom/2)':d=1:s={g.W}x{g.H}:fps={FPS}{fit},trim=duration={dur:.3f},setsar=1,"
                 f"setpts=PTS-STARTPTS[v{i}]")
             n += 1
@@ -209,7 +215,8 @@ def render(script: dict, timeline: list[dict], voice: Path, total: float, team: 
             clips = []
     script["host"] = host if clips else ""
     host_beats = frozenset(i for i, _, _ in spans) if clips else frozenset()
-    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats, cartoon=bool(host_beats),
+    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats,
+                     cartoon=bool(host_beats) or cartoon_style(),
                      scenes=scenes)
     frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host_beats=host_beats)
     inputs = ["-i", str(bg), "-f", "concat", "-safe", "0", "-i", str(frames), "-i", str(voice)]
