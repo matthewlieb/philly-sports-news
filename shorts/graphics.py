@@ -151,11 +151,23 @@ def big_hook(text: str, team: str) -> Image.Image:
     return _shadowed(img, radius=22, opacity=200)
 
 
-def url_tag(text: str) -> Image.Image:
+def url_tag(text: str, ask: str = "", accent: tuple = (255, 255, 255)) -> Image.Image:
+    """The site address; with an ask, a solid pill in the team's accent ("FREE DAILY EMAIL  site.com/email")."""
     font = _sans(40, 800)
     img = Image.new("RGBA", (W, 70), (0, 0, 0, 0))
-    ImageDraw.Draw(img).text((W // 2, 35), text, font=font, fill=(255, 255, 255), anchor="mm",
-                             stroke_width=4, stroke_fill=(0, 0, 0))
+    draw = ImageDraw.Draw(img)
+    if not ask:
+        draw.text((W // 2, 35), text, font=font, fill=(255, 255, 255), anchor="mm", stroke_width=4, stroke_fill=(0, 0, 0))
+        return img
+    small = _sans(34, 800)
+    lead = f"{ask}  "
+    width = draw.textlength(lead, font=small) + draw.textlength(text, font=small)
+    pad = 28
+    x0 = (W - width) / 2 - pad
+    draw.rounded_rectangle((x0, 4, W - x0, 66), radius=31, fill=(*accent, 255))
+    left = x0 + pad
+    draw.text((left, 35), lead, font=small, fill=(255, 255, 255), anchor="lm")
+    draw.text((left + draw.textlength(lead, font=small), 35), text, font=small, fill=(0, 0, 0), anchor="lm")
     return img
 
 

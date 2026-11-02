@@ -219,8 +219,15 @@ def briefs_archive(team=None):
 def newsletter_page():
     if not newsletter.enabled():
         return redirect("/", code=302)
-    return render_template("newsletter.html", canonical=SITE_URL + "/newsletter",
+    ref = "".join(ch for ch in request.args.get("ref", "")[:20] if ch.isalnum())
+    return render_template("newsletter.html", canonical=SITE_URL + "/newsletter", source="newsletter" + (f"-{ref}" if ref else ""),
                            status=request.args.get("status"), message=_SIGNUP_MESSAGES.get(request.args.get("status")))
+
+
+@app.route("/email")
+def email_shortcut():
+    """The short address said and shown at the end of every video."""
+    return redirect(url_for("newsletter_page", ref="video"), code=302)
 
 
 _SIGNUP_MESSAGES = {

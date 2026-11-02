@@ -11,7 +11,7 @@
       <h1>The morning brief, in your inbox</h1>
       <p class="lede">One email around 7 a.m. with the Eagles news that matters and why, written from Philly's best reporting and linked to every source. Plus a quick line on the Sixers, Phillies and Flyers.</p>
       {% if message %}<p class="signup-status signup-status-{{ status }}" role="status">{{ message }}</p>{% endif %}
-      {{ signup("newsletter", heading="Sign up free", blurb="Unsubscribe anytime with one click.") }}
+      {{ signup(source or "newsletter", heading="Sign up free", blurb="Unsubscribe anytime with one click.") }}
       <h2>What you get</h2>
       <ul>
         <li>The day's Eagles story, injuries and moves, in a two-minute read</li>

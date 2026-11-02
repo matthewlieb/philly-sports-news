@@ -117,7 +117,9 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
             cards[i] = (g.card(c, team, _PHOTO_CARD_MAX), _PHOTO_CARD_Y)
         else:
             cards[i] = (g.card(c, team), _MIDDLE_Y)
-    url = g.url_tag(SITE_URL.removeprefix("https://").removeprefix("www."))
+    from lib import newsletter
+    url = g.url_tag(SITE_URL.removeprefix("https://").removeprefix("www.") + ("/email" if newsletter.enabled() else ""),
+                    "FREE DAILY EMAIL" if newsletter.enabled() else "", g.THEMES[team]["accent"])
     chunks = [_chunks(beat["words"]) for beat in timeline]
     seam = Image.new("RGBA", (g.W, 8), (*g.THEMES[team]["accent"], 255))
 
