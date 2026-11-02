@@ -59,6 +59,19 @@ def _scheduled_host(day: str) -> str | None:
     return cycle[datetime.fromisoformat(day).toordinal() % len(cycle)]
 
 
+SPOKEN_ASK = "Tell me in the comments, and get the free daily email at the link on screen."
+
+
+def _spoken_ask(day: str, kind: str) -> bool:
+    """Half the videos end by saying the newsletter ask out loud, alternating by day (and flipped for postgame and
+    breaking videos), so retention and signups can be compared with the silent half. SHORTS_SPOKEN_ASK=0 turns it
+    off, =1 says it on every video."""
+    setting = os.environ.get("SHORTS_SPOKEN_ASK", "ab")
+    if setting in ("0", "1"):
+        return setting == "1"
+    return (datetime.fromisoformat(day).toordinal() + (kind != "morning")) % 2 == 0
+
+
 def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapshot: dict | None = None,
                script_path: str | None = None, breaking: str | None = None, script: dict | None = None,
                host: str | None = None) -> tuple[Path, dict]:
@@ -77,6 +90,11 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
         script = write_script(team, brief, snapshot if snapshot is not None else team_snapshot(team),
                               postgame=kind == "postgame", recent_hooks=_recent_hooks(team))
     script["host"] = host or ""
+    from lib import newsletter
+    if kind != "quiz" and newsletter.enabled() and script.get("beats") and "cta" not in script:
+        script["cta"] = "spoken" if _spoken_ask(day, kind) else "silent"
+        if script["cta"] == "spoken":
+            script["beats"][-1]["say"] = f"{script['beats'][-1]['say'].rstrip()} {SPOKEN_ASK}"
     print(json.dumps(script, indent=1))
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / f"{team}-{day}-{kind}.json").write_text(json.dumps(script, indent=1))

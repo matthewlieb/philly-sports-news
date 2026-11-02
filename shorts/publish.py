@@ -247,6 +247,32 @@ def upload_threads(video: Path, text: str) -> dict:
     return {"id": pub["id"], "url": link.get("permalink")}
 
 
+def _signup_comment(team: str) -> str:
+    return (f"Want this in your inbox? The {TEAMS[team]['name']} news that matters, every morning, free: "
+            f"{SITE_URL}/email")
+
+
+def comment_youtube(video_id: str, text: str) -> dict:
+    """Our own first comment on our own video (the token's youtube.force-ssl scope allows it)."""
+    from google.oauth2.credentials import Credentials
+    from googleapiclient.discovery import build
+
+    creds = Credentials(None, refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"], token_uri="https://oauth2.googleapis.com/token",
+                        client_id=os.environ["YOUTUBE_CLIENT_ID"], client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+                        scopes=["https://www.googleapis.com/auth/youtube.force-ssl"])
+    thread = build("youtube", "v3", credentials=creds, cache_discovery=False).commentThreads().insert(
+        part="snippet", body={"snippet": {"videoId": video_id, "topLevelComment": {"snippet": {"textOriginal": text}}}}
+    ).execute()
+    return {"id": thread["id"]}
+
+
+def comment_facebook(post_id: str, text: str) -> dict:
+    resp = requests.post(f"https://graph.facebook.com/v23.0/{post_id}/comments", timeout=60,
+                         data={"message": text, "access_token": os.environ["FB_PAGE_TOKEN"]})
+    resp.raise_for_status()
+    return resp.json()
+
+
 def _retrying(upload, attempts: int = 3):
     """Retry on dropped connections and timeouts (Facebook's upload host drops some), not on API errors."""
     for attempt in range(attempts):
@@ -279,4 +305,12 @@ def publish_all(video: Path, script: dict, team: str, day: str) -> dict:
                 results[name] = upload()
             except Exception as e:
                 results[name] = {"error": str(e)[:500]}
+    if newsletter.enabled():  # the signup link where people actually look: the top of the comments
+        for name, post in (("youtube", comment_youtube), ("facebook", comment_facebook)):
+            target = (results.get(name) or {}).get("id")
+            if target:
+                try:
+                    results[name]["comment"] = post(target, _signup_comment(team))
+                except Exception as e:
+                    results[name]["comment"] = {"error": str(e)[:300]}
     return results
