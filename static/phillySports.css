@@ -141,3 +141,10 @@ a { color: var(--team-dark); }
 .cartoon-card.status-rejected { opacity: 0.45; }
 .cartoon-card .card-body { padding: 10px; }
 .cartoon-card p { margin: 0 0 6px; font-size: 0.9rem; }
+.pick-form { display: grid; gap: 10px; }
+.pick-form input[type=text], .pick-form input[type=email] { padding: 0.5rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1rem; min-width: 0; }
+.pick-scores { display: flex; gap: 12px; flex-wrap: wrap; }
+.pick-scores label { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.pick-scores input { width: 5rem; padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 1.25rem; text-align: center; }
+.pick-form button { justify-self: start; padding: 0.5rem 1.25rem; font-weight: 600; border: 0; border-radius: 8px; background: var(--team-dark); color: #fff; }
+.pick-form .hp { position: absolute; left: -9999px; width: 1px; height: 1px; }

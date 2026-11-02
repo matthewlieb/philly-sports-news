@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Pick the Eagles Score: Free Weekly Contest | {{ site_name }}{% endblock %}
+{% block description %}Guess the final score of the Eagles' next game and climb the season leaderboard. Free, just for bragging rights.{% endblock %}
+
+{% block content %}
+<main class="container page">
+  <div class="row">
+    <div class="col-lg-8 offset-lg-2 prose">
+      <h1>Pick the score</h1>
+      <p class="lede">Call the Eagles' next final. Right winner: 3 points. Margin within 3: +2. Exact score: +5. Free, just for bragging rights.</p>
+      {% if message %}<p class="signup-status signup-status-{{ status }}" role="status">{{ message }}</p>{% endif %}
+
+      {% if game %}
+      <section class="card signup-card">
+        <div class="card-body">
+          <h2>Eagles {{ "vs." if game.home else "at" }} {{ game.opponent }}</h2>
+          <p>{{ game.kickoff_et }}{% if entries %} · {{ entries }} pick{{ "s" if entries != 1 }} in{% endif %}</p>
+          {% if open %}
+          <form class="pick-form" action="/picks" method="post">
+            <div class="pick-scores">
+              <label>Eagles <input type="number" name="ours" min="0" max="99" inputmode="numeric" required></label>
+              <label>{{ game.opponent_abbr }} <input type="number" name="theirs" min="0" max="99" inputmode="numeric" required></label>
+            </div>
+            <label class="sr-only" for="pick-name">Leaderboard name</label>
+            <input id="pick-name" type="text" name="name" maxlength="20" placeholder="Leaderboard name (e.g. Mike from Fishtown)" required>
+            <label class="sr-only" for="pick-email">Email address</label>
+            <input id="pick-email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required>
+            <input type="text" name="website" tabindex="-1" autocomplete="off" class="hp" aria-hidden="true">
+            <button type="submit">Lock it in</button>
+            <p class="muted small">Entering signs you up for the free daily Eagles email (confirm it in your inbox; unsubscribe anytime). Only your leaderboard name is shown, never your email. You can change your pick until kickoff.</p>
+          </form>
+          {% else %}
+          <p>Picks are closed for this one. Results go up after the final whistle.</p>
+          {% endif %}
+        </div>
+      </section>
+      {% else %}
+      <p>The next game isn't on the schedule yet. Check back soon.</p>
+      {% endif %}
+
+      {% if last %}
+      <h2>Last game: {{ last.final }} vs. {{ last.opponent }}</h2>
+      <p>{{ last.entries }} pick{{ "s" if last.entries != 1 }}.{% if last.top %} Best calls:{% endif %}</p>
+      {% if last.top %}<ol>{% for r in last.top %}<li>{{ r.name }}: {{ r.pick }} ({{ r.points }} pts)</li>{% endfor %}</ol>{% endif %}
+      {% endif %}
+
+      <h2>Season leaderboard</h2>
+      {% if board %}
+      <ol>{% for r in board %}<li>{{ r.name }}: {{ r.points }} pts</li>{% endfor %}</ol>
+      {% else %}
+      <p>Empty so far. Be the first name on it.</p>
+      {% endif %}
+      <p class="muted">Not affiliated with the Philadelphia Eagles or the NFL. No purchase, no prizes. <a href="/privacy">Privacy policy</a>.</p>
+    </div>
+  </div>
+</main>
+{% endblock %}

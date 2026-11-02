@@ -55,6 +55,11 @@
           <li class="nav-item{% if request.path.endswith('/briefs') or '/brief/' in request.path %} active{% endif %}">
             <a class="nav-link" href="/briefs">Daily Briefs</a>
           </li>
+          {% if newsletter_on %}
+          <li class="nav-item{% if request.path == '/picks' %} active{% endif %}">
+            <a class="nav-link" href="/picks">Pick the Score</a>
+          </li>
+          {% endif %}
         </ul>
       </div>
     </nav>

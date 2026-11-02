@@ -74,10 +74,28 @@ class _MemoryStore:
         z = self._data.setdefault(key, {})
         z.update(mapping)
 
-    def zrevrange(self, key, start, end):
+    def zrevrange(self, key, start, end, withscores=False):
         z = self._data.get(key) or {}
-        members = sorted(z, key=lambda m: z[m], reverse=True)
-        return members[start:None if end == -1 else end + 1]
+        members = sorted(z, key=lambda m: z[m], reverse=True)[start:None if end == -1 else end + 1]
+        return [(m, z[m]) for m in members] if withscores else members
+
+    def zincrby(self, key, amount, member):
+        z = self._data.setdefault(key, {})
+        z[member] = z.get(member, 0) + amount
+        return z[member]
+
+    def hset(self, key, field, value):
+        self._data.setdefault(key, {})[field] = value
+
+    def hgetall(self, key):
+        return dict(self._data.get(key) or {}) if self._alive(key) else {}
+
+    def hmget(self, key, fields):
+        h = self._data.get(key) or {}
+        return [h.get(f) for f in fields]
+
+    def hlen(self, key):
+        return len(self._data.get(key) or {})
 
     def zscore(self, key, member):
         return (self._data.get(key) or {}).get(member)

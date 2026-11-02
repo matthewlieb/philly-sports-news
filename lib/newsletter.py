@@ -63,6 +63,27 @@ def _brief_markdown(brief: dict) -> str:
     return "\n\n".join(parts)
 
 
+def _picks_section() -> list[str]:
+    """Pick-the-score: last game's best calls and the season top 3, plus a link to pick the next one."""
+    try:
+        from lib import picks
+        game, last, board = picks.next_game(), picks.last_results(), picks.leaderboard(3)
+    except Exception as e:
+        print(f"Picks section skipped: {e}")
+        return []
+    lines = ["## Pick the score"]
+    if last and last.get("top"):
+        best = last["top"][0]
+        lines.append(f"Final vs. {last['opponent']}: {last['final']}. Best call: **{best['name']}** "
+                     f"({best['pick']}, {best['points']} pts).")
+    if board:
+        lines.append("Season leaders: " + ", ".join(f"{r['rank']}. {r['name']} ({r['points']})" for r in board))
+    if game and picks.is_open(game):
+        lines.append(f"[Call the Eagles {'vs.' if game['home'] else 'at'} {game['opponent']} score]"
+                     f"({SITE_URL}/picks?utm_source=email): right winner 3 pts, exact score 10.")
+    return lines if len(lines) > 1 else []
+
+
 def daily_email(day: str, lead: str = "eagles") -> tuple[str, str] | None:
     """(subject, markdown body): the lead team's full brief, then one line on each other team's."""
     found = dict(zip(TEAM_SLUGS, briefs.get_briefs([(t, day) for t in TEAM_SLUGS])))
@@ -77,6 +98,7 @@ def daily_email(day: str, lead: str = "eagles") -> tuple[str, str] | None:
     if others:
         body.append("## Around Philly today")
         body += [f"- **{TEAMS[t]['name']}:** [{b['headline']}]({brief_url(t, day)}?utm_source=email)" for t, b in others]
+    body += _picks_section()
     body.append(f"---\n\n*{SITE_NAME} writes these briefs each morning with the help of AI, working only from the "
                 "reporting it links to. Spot an error? Just reply to this email.*\n\n"
                 f"*Know a fan who'd want this? Send them to {SITE_URL}/newsletter*")

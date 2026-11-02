@@ -259,6 +259,46 @@ def subscribe():
     return redirect(url_for("newsletter_page", status=status))
 
 
+_PICK_MESSAGES = {
+    "ok": "You're in! Check your inbox to confirm the daily email, and watch the leaderboard after the game.",
+    "closed": "Picks for this game are closed. Come back for the next one.",
+    "invalid": "Check your pick: a name, an email, and a score with a winner.",
+    "limited": "Too many entries from this connection. Try again later.",
+    "error": "Something went wrong on our end. Please try again in a minute.",
+}
+
+
+@app.route("/picks", methods=["GET", "POST"])
+def picks_page():
+    """Pick the score: guess the Eagles' next final, climb the season leaderboard. Entering joins the daily email."""
+    if not newsletter.enabled():
+        return redirect("/", code=302)
+    from lib import picks
+
+    game = picks.next_game()
+    if request.method == "POST":
+        status = "ok"
+        if not request.form.get("website") and game:  # hidden field only bots fill in
+            ip = (request.headers.get("X-Real-IP") or request.headers.get("X-Forwarded-For") or request.remote_addr or "")
+            try:
+                ours, theirs = int(request.form.get("ours", "")), int(request.form.get("theirs", ""))
+                status = picks.submit(game, request.form.get("email", ""), request.form.get("name", ""), ours, theirs)
+                if status == "ok":
+                    joined = newsletter.subscribe(request.form.get("email", ""), ip=ip.split(",")[0].strip(), source="picks")
+                    status = "ok" if joined in ("ok", "exists") else joined
+            except ValueError:
+                status = "invalid"
+            except Exception as e:
+                app.logger.warning("pick failed: %s", e)
+                status = "error"
+        return redirect(url_for("picks_page", status=status))
+    status = request.args.get("status")
+    return render_template("picks.html", canonical=SITE_URL + "/picks", game=game,
+                           open=bool(game) and picks.is_open(game), entries=picks.count(game["id"]) if game else 0,
+                           board=picks.leaderboard(), last=picks.last_results(),
+                           status=status, message=_PICK_MESSAGES.get(status))
+
+
 @app.route("/about")
 def about():
     return render_template("about.html", canonical=SITE_URL + "/about")
@@ -364,6 +404,7 @@ def sitemap():
     urls += [(SITE_URL + "/about", None, "yearly"), (SITE_URL + "/privacy", None, "yearly")]
     if newsletter.enabled():
         urls.append((SITE_URL + "/newsletter", None, "monthly"))
+        urls.append((SITE_URL + "/picks", None, "daily"))
     return Response(render_template("sitemap.xml", urls=urls), mimetype="application/xml")
 
 
