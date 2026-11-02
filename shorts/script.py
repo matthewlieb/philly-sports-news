@@ -107,11 +107,15 @@ def write_script(team: str, brief: dict | None, snapshot: dict, postgame: bool =
         raw = resp.choices[0].message.content or "{}"
         script = json.loads(raw)
         words = _spoken_words(script)
-        if words <= MAX_WORDS:
+        asks = (((script.get("beats") or [{}])[-1].get("say") or "").rstrip().endswith("?"))
+        if words <= MAX_WORDS and asks:
             break
+        fixes = ([f"That is {words} spoken words. Cut it to at most {MAX_WORDS - 10} by removing the weakest details."]
+                 if words > MAX_WORDS else [])
+        if not asks:  # the comment question drives comments and the loop; the model sometimes ends on a schedule line
+            fixes.append("The last beat must be the one specific comment question for fans (ending in '?').")
         messages += [{"role": "assistant", "content": raw},
-                     {"role": "user", "content": f"That is {words} spoken words. Cut it to at most {MAX_WORDS - 10} "
-                                                 "by removing the weakest details. Same JSON format."}]
+                     {"role": "user", "content": " ".join(fixes) + " Same JSON format."}]
     beats = []
     for b in script.get("beats") or []:
         say = _clean(b.get("say") or "")
