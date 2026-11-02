@@ -17,8 +17,9 @@ _PHOTO_HOOK_TOP, _PHOTO_CARD_Y, _PHOTO_CARD_MAX, _URL_Y = 640, 740, 420, 1400
 _ZOOM = 0.07  # slow push-in on photos over each beat
 # On a host beat: photo on top, host below the split, captions on the seam.
 _SPLIT = 1920 - HOST_HEIGHT
-_HOST_CAPTION_Y, _HOST_CARD_MAX, _HOST_URL_Y = _SPLIT - 100, 420, _SPLIT - 190
-_HOST_PHOTO_TOP = 60  # which rows of a full-height photo frame land in the top part (keeps faces in view)
+_HOST_CAPTION_Y, _HOST_CARD_MAX, _HOST_URL_Y = _SPLIT - 100, 280, _SPLIT - 190
+# which rows of a full-height photo frame land in the top part: the face sits above the (short) card, not behind it
+_HOST_PHOTO_TOP = 200
 
 
 def _chunks(words: list[tuple[str, float, float]]) -> list[list[int]]:
@@ -37,9 +38,11 @@ def _run(cmd: list[str]) -> None:
 
 
 def _background(timeline: list[dict], total: float, seed: str, team: str, photos: list[Path | None],
-                workdir: Path, host_beats: frozenset = frozenset(), cartoon: bool = False) -> Path:
-    """One segment per beat: the beat's photo with a slow push-in, or tinted stadium footage when it has none.
-    Host beats show the middle of the picture in the top part, above the split."""
+                workdir: Path, host_beats: frozenset = frozenset(), cartoon: bool = False,
+                scenes: dict[int, Path] | None = None) -> Path:
+    """One segment per beat: the beat's photo with a slow push-in, its own drawn scene (shorts.scenes, shown in full
+    color), or tinted stadium footage. Host beats show the middle of the picture in the top part, above the split."""
+    scenes = scenes or {}
     out = workdir / "bg.mp4"
     clips = pick_clips(len(timeline), seed, cartoon=cartoon)
     tint = workdir / "tint.png"
@@ -52,7 +55,12 @@ def _background(timeline: list[dict], total: float, seed: str, team: str, photos
         dur = end - beat["start"]
         frames = max(1, round(dur * FPS))
         photo = photos[i] if i < len(photos) else None
-        if photo:
+        if i in scenes:
+            inputs += ["-stream_loop", "-1", "-t", f"{dur:.3f}", "-i", str(scenes[i])]
+            filters.append(f"[{n}:v]scale={g.W}:{g.H}:force_original_aspect_ratio=increase,crop={g.W}:{g.H},setsar=1,"
+                           f"fps={FPS},trim=duration={dur:.3f},setpts=PTS-STARTPTS{fit},format=yuv420p,setsar=1[v{i}]")
+            n += 1
+        elif photo:
             inputs += ["-loop", "1", "-framerate", str(FPS), "-t", f"{dur:.3f}", "-i", str(photo)]
             filters.append(
                 f"[{n}:v]scale={g.W * 2}:{g.H * 2},zoompan=z='1+{_ZOOM}*on/{frames}':x='iw/2-(iw/zoom/2)':"
@@ -173,11 +181,12 @@ def host_beat_spans(timeline: list[dict], total: float) -> list[tuple[int, float
 
 def render(script: dict, timeline: list[dict], voice: Path, total: float, team: str, tag: str,
            workdir: Path, out: Path, photos: list[Path | None] = (), host: str | None = None,
-           host_video: Path | None = None) -> Path:
+           host_video: Path | None = None, scenes: dict[int, Path] | None = None) -> Path:
     """photos: per beat, a prepared 1080x1920 photo (graphics.photo_frame) or None for stadium footage.
     host: a shorts.host.HOSTS name to put a talking host under the split on the bookend beats (host_beat_spans).
     It is animated by P-Video when SHORTS_HOST_ENGINE=pvideo (within the monthly budget), else drawn here.
-    host_video: an already-animated talking video of that host for the whole narration, to use instead."""
+    host_video: an already-animated talking video of that host for the whole narration, to use instead.
+    scenes: {beat: clip} drawn for this video (shorts.scenes), shown on beats that have no photo."""
     photos = list(photos)
     spans = host_beat_spans(timeline, total) if host else []
     clips: list[tuple[float, float, Path, float]] = []  # (start, end, video, the video's time offset)
@@ -200,7 +209,8 @@ def render(script: dict, timeline: list[dict], voice: Path, total: float, team: 
             clips = []
     script["host"] = host if clips else ""
     host_beats = frozenset(i for i, _, _ in spans) if clips else frozenset()
-    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats, cartoon=bool(host_beats))
+    bg = _background(timeline, total, tag, team, photos, workdir, host_beats=host_beats, cartoon=bool(host_beats),
+                     scenes=scenes)
     frames = _graphics_frames(script, timeline, total, team, tag, photos, workdir, host_beats=host_beats)
     inputs = ["-i", str(bg), "-f", "concat", "-safe", "0", "-i", str(frames), "-i", str(voice)]
     chain, last = [], "0:v"

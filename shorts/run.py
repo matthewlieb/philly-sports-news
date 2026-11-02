@@ -93,7 +93,11 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
         label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA"}.get(kind, "DAILY")
         tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
         out = out_dir / f"{team}-{day}-{kind}{'-' + host if host else ''}.mp4"
-        render(script, timeline, voice, total, team, tag, workdir, out, pictures, host=host)
+        from shorts import scenes
+        drawn = scenes.beat_scenes(script, team, pictures, workdir) if kind != "quiz" else {}
+        if drawn:
+            script["photo_credits"].append("Cartoon scenes: AI illustration by Philly Sport Daily")
+        render(script, timeline, voice, total, team, tag, workdir, out, pictures, host=host, scenes=drawn)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)  # frames and audio run to hundreds of MB per video
     print(f"Rendered {out} ({total:.1f}s)")
