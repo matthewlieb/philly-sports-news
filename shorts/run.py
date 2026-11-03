@@ -10,7 +10,9 @@
   postgame  4.5 to 20 hours after kickoff of a finished game that hasn't had one: refreshes today's
             brief with the recaps, then makes a result-first video
   breaking  when neither is due: a major new development nobody has covered (see shorts/breaking.py)
-  quiz      Thursdays from noon ET: three verified trivia questions (see shorts/quiz.py)
+  picks     Thursdays from noon ET: "call the score" for the next game, pointing to /picks (shorts/picks_video.py);
+            SHORTS_WEEKLY=quiz swaps back to three verified trivia questions (shorts/quiz.py)
+Instagram carousels only post with SHORTS_CAROUSELS set.
 """
 import argparse
 import json
@@ -25,7 +27,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from lib import briefs, store  # noqa: E402
+from lib import briefs, picks, store  # noqa: E402
 from lib.espn import hours_since, team_snapshot  # noqa: E402
 from lib.teams import TEAMS  # noqa: E402
 from shorts.photos import beat_photos  # noqa: E402
@@ -108,7 +110,7 @@ def make_short(team: str, day: str, out_dir: Path, kind: str = "morning", snapsh
         except Exception as e:
             print(f"Photos unavailable, using footage only: {e}")
             pictures, script["photo_credits"] = [], []
-        label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA"}.get(kind, "DAILY")
+        label = {"postgame": "POSTGAME", "breaking": "BREAKING", "quiz": "TRIVIA", "picks": "PICK THE SCORE"}.get(kind, "DAILY")
         tag = f"{TEAMS[team]['name']} {label} · {datetime.fromisoformat(day):%b %-d}".upper()
         out = out_dir / f"{team}-{day}-{kind}{'-' + host if host else ''}.mp4"
         from shorts import scenes
@@ -198,11 +200,12 @@ def main():
         else:
             print("No scheduled video due now.")
         if social_ready:
-            _carousels(team, day, snapshot, Path(args.out))
+            if os.environ.get("SHORTS_CAROUSELS"):  # off: feed posts reach only followers (0-4 views each so far)
+                _carousels(team, day, snapshot, Path(args.out))
             if not kind:
                 _breaking(args, team, day, snapshot)
             if not kind:
-                _quiz(args, team, day)
+                _weekly(args, team, day)
         return
     if kind == "postgame":
         snapshot = team_snapshot(team)
@@ -210,6 +213,37 @@ def main():
 
 
 QUIZ_WEEKDAY, QUIZ_HOUR = 3, 12  # Thursdays from noon ET
+PICKS_MIN_LEAD_HOURS = 24  # leave fans a day to enter before kickoff
+
+
+def _weekly(args, team: str, day: str) -> None:
+    """The Thursday video: pick the score (SHORTS_WEEKLY=quiz brings back trivia)."""
+    if os.environ.get("SHORTS_WEEKLY", "picks") == "quiz" or team != picks.TEAM:
+        _quiz(args, team, day)
+    else:
+        _picks(args, team, day)
+
+
+def _picks(args, team: str, day: str, force: bool = False) -> None:
+    from shorts import picks_video
+
+    now = datetime.now(briefs.EASTERN)
+    if not force and (now.weekday() != QUIZ_WEEKDAY or now.hour < QUIZ_HOUR):
+        return
+    game = picks.next_game()
+    if not game or -hours_since(game["kickoff_utc"]) < PICKS_MIN_LEAD_HOURS:
+        return
+    posted_key = store.key("shorts", team, "picks", game["id"])
+    if not force and store.client().get(posted_key):
+        return
+    video, script = make_short(team, day, Path(args.out), "picks", script=picks_video.build_script(team, game))
+    if not args.publish:
+        return
+    from shorts.publish import publish_all
+    results = publish_all(video, script, team, day)
+    print(json.dumps(results, indent=1))
+    if any(r.get("id") for r in results.values()):
+        store.client().set(posted_key, json.dumps(results), ex=30 * 86400)
 
 
 def _quiz(args, team: str, day: str, force: bool = False) -> None:

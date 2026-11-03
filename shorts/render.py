@@ -118,8 +118,12 @@ def _graphics_frames(script: dict, timeline: list[dict], total: float, team: str
         else:
             cards[i] = (g.card(c, team), _MIDDLE_Y)
     from lib import newsletter
-    url = g.url_tag(SITE_URL.removeprefix("https://").removeprefix("www.") + ("/email" if newsletter.enabled() else ""),
-                    "FREE DAILY EMAIL" if newsletter.enabled() else "", g.THEMES[team]["accent"])
+    site = SITE_URL.removeprefix("https://").removeprefix("www.")
+    if script.get("link_path"):
+        url = g.url_tag(site + script["link_path"], script.get("link_label", ""), g.THEMES[team]["accent"])
+    else:
+        url = g.url_tag(site + ("/email" if newsletter.enabled() else ""),
+                        "FREE DAILY EMAIL" if newsletter.enabled() else "", g.THEMES[team]["accent"])
     chunks = [_chunks(beat["words"]) for beat in timeline]
     seam = Image.new("RGBA", (g.W, 8), (*g.THEMES[team]["accent"], 255))
 

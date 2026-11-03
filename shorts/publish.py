@@ -31,6 +31,16 @@ def _email_line(team: str) -> str:
 def _texts(script: dict, team: str, day: str) -> tuple[str, str, list[str]]:
     hashtags = [h if h.startswith("#") else f"#{h}" for h in script.get("hashtags") or []][:5]
     title = script["title"].strip()[:100]
+    if script.get("kind") == "picks":
+        description = (
+            f"{script.get('caption', '').strip()}\n\n"
+            f"Season leaderboard: {SITE_URL}{script['link_path']}\n"
+            + _email_line(team) +
+            "\nNarration is AI-generated. Not affiliated with the team or the NFL.\n\n"
+            + (f"Photos: {'; '.join(script['photo_credits'])}\n\n" if script.get("photo_credits") else "")
+            + " ".join(hashtags)
+        )
+        return title, description, hashtags
     if script.get("kind") == "quiz":
         description = (
             f"{script.get('caption', '').strip()}\n\n"
@@ -247,7 +257,9 @@ def upload_threads(video: Path, text: str) -> dict:
     return {"id": pub["id"], "url": link.get("permalink")}
 
 
-def _signup_comment(team: str) -> str:
+def _signup_comment(team: str, script: dict | None = None) -> str:
+    if script and script.get("link_path"):
+        return f"Lock in your pick (free, takes 10 seconds): {SITE_URL}{script['link_path']}"
     return (f"Want this in your inbox? The {TEAMS[team]['name']} news that matters, every morning, free: "
             f"{SITE_URL}/email")
 
@@ -310,7 +322,7 @@ def publish_all(video: Path, script: dict, team: str, day: str) -> dict:
             target = (results.get(name) or {}).get("id")
             if target:
                 try:
-                    results[name]["comment"] = post(target, _signup_comment(team))
+                    results[name]["comment"] = post(target, _signup_comment(team, script))
                 except Exception as e:
                     results[name]["comment"] = {"error": str(e)[:300]}
     return results
