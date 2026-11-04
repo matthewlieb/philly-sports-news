@@ -76,6 +76,9 @@
           <a href="/privacy">Privacy</a>
           <a href="https://x.com/{{ x_handle }}" target="_blank" rel="noopener">@{{ x_handle }} on X</a>
         </nav>
+        <p class="footer-creators">Philly creators we read:
+          {% for c in creators %}<a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.name }}</a> <span class="creator-what">({{ c.what }})</span>{{ " · " if not loop.last }}{% endfor %}
+        </p>
         <p>&copy; {{ year }} {{ site_name }}. Headlines link to their original publishers.</p>
       </div>
     </footer>

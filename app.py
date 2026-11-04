@@ -16,6 +16,7 @@ from flask import Flask, Response, abort, jsonify, redirect, render_template, re
 import lib.config as config  # noqa: E402
 from lib import briefs as brief_store  # noqa: E402
 from lib import newsletter  # noqa: E402
+from lib.creators import CREATORS  # noqa: E402
 from lib import store  # noqa: E402
 from lib.article_enhancer import enhance_article_data  # noqa: E402
 from lib.articles import collect_ranked_articles  # noqa: E402
@@ -43,6 +44,7 @@ def _site_globals():
         "site_verification": os.environ.get("GOOGLE_SITE_VERIFICATION"),
         "year": date.today().year,
         "newsletter_on": newsletter.enabled(),
+        "creators": CREATORS,
     }
 
 
