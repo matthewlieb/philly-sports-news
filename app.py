@@ -29,7 +29,8 @@ app.config.update(SESSION_COOKIE_SECURE=bool(os.environ.get("SECRET_KEY")), SESS
                   SESSION_COOKIE_HTTPONLY=True)
 
 ADSENSE_CLIENT = "ca-pub-5735663043216445"
-_BOT_MARKERS = ("bot", "crawl", "spider", "slurp", "preview", "monitor", "curl", "python", "headless")
+_BOT_MARKERS = ("bot", "crawl", "spider", "slurp", "preview", "monitor", "curl", "python", "headless",
+                "externalhit", "externalagent")  # Facebook/Meta link-preview fetchers
 
 
 @app.context_processor
